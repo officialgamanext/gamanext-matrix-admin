@@ -7,6 +7,7 @@ import {
   Users,
   Receipt,
   Briefcase,
+  FolderKanban,
   Target,
   FileText,
   Building2,
@@ -38,6 +39,11 @@ export default function Sidebar() {
       name: "Employees",
       href: "/employees",
       icon: Briefcase,
+    },
+    {
+      name: "Projects",
+      href: "/projects",
+      icon: FolderKanban,
     },
     {
       name: "Departments & Roles",
@@ -120,7 +126,7 @@ export default function Sidebar() {
               <Sparkles className="w-3 h-3 text-[#0B4FBA]" />
               <span>GamaNext v1.0</span>
             </div>
-            <div className="text-gray-500 text-[11px]">8 Core Modules</div>
+            <div className="text-gray-500 text-[11px]">9 Core Modules</div>
           </div>
           <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-100 text-emerald-800">
             Active

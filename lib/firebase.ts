@@ -5,9 +5,11 @@ import {
   addDoc,
   getDocs,
   deleteDoc,
+  updateDoc,
   doc,
   query,
   orderBy,
+  where,
 } from "firebase/firestore";
 
 const firebaseConfig = {
@@ -75,9 +77,65 @@ export interface RoleItem {
   createdAt?: string;
 }
 
+export interface MasterProjectItem {
+  id?: string;
+  name: string;
+  createdAt?: string;
+}
+
+export interface ProjectAllocation {
+  id?: string;
+  employeeId: string;
+  projectName: string;
+  role: string;
+  startDate: string;
+  endDate?: string;
+  status: "Active" | "Completed";
+  createdAt?: string;
+}
+
+export interface LeaveRequest {
+  id?: string;
+  employeeId: string;
+  fromDate: string;
+  toDate: string;
+  leaveType: "Casual Leave" | "Sick Leave" | "Maternity Leave" | "Paternity Leave";
+  reason: string;
+  status: "Pending" | "Approved" | "Rejected";
+  quarter: string; // e.g. Q1, Q2, Q3, Q4
+  daysCount: number;
+  createdAt?: string;
+}
+
+export interface WFHRequest {
+  id?: string;
+  employeeId: string;
+  fromDate: string;
+  toDate: string;
+  month: string;
+  reason: string;
+  status: "Pending" | "Approved" | "Rejected";
+  createdAt?: string;
+}
+
+export interface TimesheetEntry {
+  id?: string;
+  employeeId: string;
+  date: string;
+  projectName: string;
+  billingHours: number;
+  tasks: string;
+  createdAt?: string;
+}
+
 const LOCAL_STORAGE_KEY_EMPLOYEES = "gamanext_employees_data";
 const LOCAL_STORAGE_KEY_DEPTS = "gamanext_departments_data";
 const LOCAL_STORAGE_KEY_ROLES = "gamanext_roles_data";
+const LOCAL_STORAGE_KEY_MASTER_PROJECTS = "gamanext_master_projects_data";
+const LOCAL_STORAGE_KEY_PROJECTS = "gamanext_projects_data";
+const LOCAL_STORAGE_KEY_LEAVES = "gamanext_leaves_data";
+const LOCAL_STORAGE_KEY_WFH = "gamanext_wfh_data";
+const LOCAL_STORAGE_KEY_TIMESHEETS = "gamanext_timesheets_data";
 
 /* ---------------- EMPLOYEES STORAGE HELPERS ---------------- */
 export async function getEmployeesFromStorage(): Promise<EmployeeData[]> {
@@ -88,7 +146,7 @@ export async function getEmployeesFromStorage(): Promise<EmployeeData[]> {
     snapshot.forEach((docSnap) => {
       employees.push({ id: docSnap.id, ...docSnap.data() } as EmployeeData);
     });
-    return employees;
+    if (employees.length > 0) return employees;
   } catch (err) {
     console.warn("Firestore fetch notice, using fallback cache:", err);
   }
@@ -105,6 +163,13 @@ export async function getEmployeesFromStorage(): Promise<EmployeeData[]> {
   }
 
   return [];
+}
+
+export async function getEmployeeByIdFromStorage(id: string): Promise<EmployeeData | null> {
+  const employees = await getEmployeesFromStorage();
+  return (
+    employees.find((emp) => emp.id === id || emp.employeeId === id) || null
+  );
 }
 
 export async function saveEmployeeToStorage(employee: EmployeeData): Promise<EmployeeData> {
@@ -136,6 +201,30 @@ export async function saveEmployeeToStorage(employee: EmployeeData): Promise<Emp
   return newEmployee;
 }
 
+export async function updateEmployeeInStorage(
+  id: string,
+  updatedData: Partial<EmployeeData>
+): Promise<boolean> {
+  try {
+    if (id) {
+      const docRef = doc(db, "employees", id);
+      await updateDoc(docRef, updatedData);
+    }
+  } catch (err) {
+    console.error("Firestore update error:", err);
+  }
+
+  if (typeof window !== "undefined") {
+    const existing = await getEmployeesFromStorage();
+    const updatedList = existing.map((emp) =>
+      emp.id === id || emp.employeeId === id ? { ...emp, ...updatedData } : emp
+    );
+    localStorage.setItem(LOCAL_STORAGE_KEY_EMPLOYEES, JSON.stringify(updatedList));
+  }
+
+  return true;
+}
+
 export async function deleteEmployeeFromStorage(id: string): Promise<boolean> {
   try {
     if (id) {
@@ -147,7 +236,7 @@ export async function deleteEmployeeFromStorage(id: string): Promise<boolean> {
 
   if (typeof window !== "undefined") {
     const existing = await getEmployeesFromStorage();
-    const filtered = existing.filter((emp) => emp.id !== id);
+    const filtered = existing.filter((emp) => emp.id !== id && emp.employeeId !== id);
     localStorage.setItem(LOCAL_STORAGE_KEY_EMPLOYEES, JSON.stringify(filtered));
   }
 
@@ -282,4 +371,323 @@ export async function deleteRoleFromStorage(id: string): Promise<boolean> {
     localStorage.setItem(LOCAL_STORAGE_KEY_ROLES, JSON.stringify(filtered));
   }
   return true;
+}
+
+/* ---------------- MASTER PROJECTS STORAGE HELPERS ---------------- */
+export async function getMasterProjectsFromStorage(): Promise<MasterProjectItem[]> {
+  try {
+    const q = query(collection(db, "master_projects"), orderBy("createdAt", "desc"));
+    const snapshot = await getDocs(q);
+    const items: MasterProjectItem[] = [];
+    snapshot.forEach((docSnap) => {
+      items.push({ id: docSnap.id, ...docSnap.data() } as MasterProjectItem);
+    });
+    return items;
+  } catch (err) {
+    console.warn("Firestore master projects fetch notice:", err);
+  }
+
+  if (typeof window !== "undefined") {
+    const data = localStorage.getItem(LOCAL_STORAGE_KEY_MASTER_PROJECTS);
+    if (data) {
+      try {
+        return JSON.parse(data);
+      } catch (e) {}
+    }
+  }
+
+  return [];
+}
+
+export async function saveMasterProjectToStorage(name: string): Promise<MasterProjectItem> {
+  const item: MasterProjectItem = {
+    name: name.trim(),
+    createdAt: new Date().toISOString(),
+  };
+
+  try {
+    const docRef = await addDoc(collection(db, "master_projects"), item);
+    const created = { ...item, id: docRef.id };
+
+    if (typeof window !== "undefined") {
+      const existing = await getMasterProjectsFromStorage();
+      localStorage.setItem(LOCAL_STORAGE_KEY_MASTER_PROJECTS, JSON.stringify([created, ...existing]));
+    }
+    return created;
+  } catch (err) {
+    console.error("Firestore master project save error:", err);
+    const created = { ...item, id: `mproj-${Date.now()}` };
+    if (typeof window !== "undefined") {
+      const existing = await getMasterProjectsFromStorage();
+      localStorage.setItem(LOCAL_STORAGE_KEY_MASTER_PROJECTS, JSON.stringify([created, ...existing]));
+    }
+    return created;
+  }
+}
+
+export async function deleteMasterProjectFromStorage(id: string): Promise<boolean> {
+  try {
+    if (id) await deleteDoc(doc(db, "master_projects", id));
+  } catch (e) {}
+
+  if (typeof window !== "undefined") {
+    const existing = await getMasterProjectsFromStorage();
+    const filtered = existing.filter((p) => p.id !== id);
+    localStorage.setItem(LOCAL_STORAGE_KEY_MASTER_PROJECTS, JSON.stringify(filtered));
+  }
+  return true;
+}
+
+/* ---------------- PROJECT ALLOCATIONS STORAGE ---------------- */
+export async function getProjectsForEmployee(employeeId: string): Promise<ProjectAllocation[]> {
+  try {
+    const q = query(
+      collection(db, "project_allocations"),
+      where("employeeId", "==", employeeId)
+    );
+    const snapshot = await getDocs(q);
+    const projects: ProjectAllocation[] = [];
+    snapshot.forEach((docSnap) => {
+      projects.push({ id: docSnap.id, ...docSnap.data() } as ProjectAllocation);
+    });
+    if (projects.length > 0) return projects;
+  } catch (e) {}
+
+  if (typeof window !== "undefined") {
+    const data = localStorage.getItem(LOCAL_STORAGE_KEY_PROJECTS);
+    if (data) {
+      try {
+        const all: ProjectAllocation[] = JSON.parse(data);
+        return all.filter((p) => p.employeeId === employeeId);
+      } catch (e) {}
+    }
+  }
+  return [];
+}
+
+export async function saveProjectForEmployee(project: ProjectAllocation): Promise<ProjectAllocation> {
+  const item: ProjectAllocation = {
+    ...project,
+    createdAt: new Date().toISOString(),
+  };
+
+  try {
+    const docRef = await addDoc(collection(db, "project_allocations"), item);
+    const created = { ...item, id: docRef.id };
+    if (typeof window !== "undefined") {
+      const existingStr = localStorage.getItem(LOCAL_STORAGE_KEY_PROJECTS);
+      const existing: ProjectAllocation[] = existingStr ? JSON.parse(existingStr) : [];
+      localStorage.setItem(LOCAL_STORAGE_KEY_PROJECTS, JSON.stringify([created, ...existing]));
+    }
+    return created;
+  } catch (e) {
+    const created = { ...item, id: `proj-${Date.now()}` };
+    if (typeof window !== "undefined") {
+      const existingStr = localStorage.getItem(LOCAL_STORAGE_KEY_PROJECTS);
+      const existing: ProjectAllocation[] = existingStr ? JSON.parse(existingStr) : [];
+      localStorage.setItem(LOCAL_STORAGE_KEY_PROJECTS, JSON.stringify([created, ...existing]));
+    }
+    return created;
+  }
+}
+
+/* ---------------- LEAVES STORAGE ---------------- */
+export async function getLeavesForEmployee(employeeId: string): Promise<LeaveRequest[]> {
+  try {
+    const q = query(
+      collection(db, "leave_requests"),
+      where("employeeId", "==", employeeId)
+    );
+    const snapshot = await getDocs(q);
+    const leaves: LeaveRequest[] = [];
+    snapshot.forEach((docSnap) => {
+      leaves.push({ id: docSnap.id, ...docSnap.data() } as LeaveRequest);
+    });
+    if (leaves.length > 0) return leaves;
+  } catch (e) {}
+
+  if (typeof window !== "undefined") {
+    const data = localStorage.getItem(LOCAL_STORAGE_KEY_LEAVES);
+    if (data) {
+      try {
+        const all: LeaveRequest[] = JSON.parse(data);
+        return all.filter((l) => l.employeeId === employeeId);
+      } catch (e) {}
+    }
+  }
+  return [];
+}
+
+export async function saveLeaveForEmployee(leave: LeaveRequest): Promise<LeaveRequest> {
+  const item: LeaveRequest = {
+    ...leave,
+    createdAt: new Date().toISOString(),
+  };
+
+  try {
+    const docRef = await addDoc(collection(db, "leave_requests"), item);
+    const created = { ...item, id: docRef.id };
+    if (typeof window !== "undefined") {
+      const existingStr = localStorage.getItem(LOCAL_STORAGE_KEY_LEAVES);
+      const existing: LeaveRequest[] = existingStr ? JSON.parse(existingStr) : [];
+      localStorage.setItem(LOCAL_STORAGE_KEY_LEAVES, JSON.stringify([created, ...existing]));
+    }
+    return created;
+  } catch (e) {
+    const created = { ...item, id: `leave-${Date.now()}` };
+    if (typeof window !== "undefined") {
+      const existingStr = localStorage.getItem(LOCAL_STORAGE_KEY_LEAVES);
+      const existing: LeaveRequest[] = existingStr ? JSON.parse(existingStr) : [];
+      localStorage.setItem(LOCAL_STORAGE_KEY_LEAVES, JSON.stringify([created, ...existing]));
+    }
+    return created;
+  }
+}
+
+export async function updateLeaveStatusInStorage(
+  id: string,
+  status: "Approved" | "Rejected"
+): Promise<boolean> {
+  try {
+    if (id) {
+      await updateDoc(doc(db, "leave_requests", id), { status });
+    }
+  } catch (e) {}
+
+  if (typeof window !== "undefined") {
+    const existingStr = localStorage.getItem(LOCAL_STORAGE_KEY_LEAVES);
+    if (existingStr) {
+      const existing: LeaveRequest[] = JSON.parse(existingStr);
+      const updated = existing.map((l) => (l.id === id ? { ...l, status } : l));
+      localStorage.setItem(LOCAL_STORAGE_KEY_LEAVES, JSON.stringify(updated));
+    }
+  }
+  return true;
+}
+
+/* ---------------- WFH STORAGE ---------------- */
+export async function getWFHForEmployee(employeeId: string): Promise<WFHRequest[]> {
+  try {
+    const q = query(
+      collection(db, "wfh_requests"),
+      where("employeeId", "==", employeeId)
+    );
+    const snapshot = await getDocs(q);
+    const wfh: WFHRequest[] = [];
+    snapshot.forEach((docSnap) => {
+      wfh.push({ id: docSnap.id, ...docSnap.data() } as WFHRequest);
+    });
+    if (wfh.length > 0) return wfh;
+  } catch (e) {}
+
+  if (typeof window !== "undefined") {
+    const data = localStorage.getItem(LOCAL_STORAGE_KEY_WFH);
+    if (data) {
+      try {
+        const all: WFHRequest[] = JSON.parse(data);
+        return all.filter((w) => w.employeeId === employeeId);
+      } catch (e) {}
+    }
+  }
+  return [];
+}
+
+export async function saveWFHForEmployee(wfh: WFHRequest): Promise<WFHRequest> {
+  const item: WFHRequest = {
+    ...wfh,
+    createdAt: new Date().toISOString(),
+  };
+
+  try {
+    const docRef = await addDoc(collection(db, "wfh_requests"), item);
+    const created = { ...item, id: docRef.id };
+    if (typeof window !== "undefined") {
+      const existingStr = localStorage.getItem(LOCAL_STORAGE_KEY_WFH);
+      const existing: WFHRequest[] = existingStr ? JSON.parse(existingStr) : [];
+      localStorage.setItem(LOCAL_STORAGE_KEY_WFH, JSON.stringify([created, ...existing]));
+    }
+    return created;
+  } catch (e) {
+    const created = { ...item, id: `wfh-${Date.now()}` };
+    if (typeof window !== "undefined") {
+      const existingStr = localStorage.getItem(LOCAL_STORAGE_KEY_WFH);
+      const existing: WFHRequest[] = existingStr ? JSON.parse(existingStr) : [];
+      localStorage.setItem(LOCAL_STORAGE_KEY_WFH, JSON.stringify([created, ...existing]));
+    }
+    return created;
+  }
+}
+
+export async function updateWFHStatusInStorage(
+  id: string,
+  status: "Approved" | "Rejected"
+): Promise<boolean> {
+  try {
+    if (id) {
+      await updateDoc(doc(db, "wfh_requests", id), { status });
+    }
+  } catch (e) {}
+
+  if (typeof window !== "undefined") {
+    const existingStr = localStorage.getItem(LOCAL_STORAGE_KEY_WFH);
+    if (existingStr) {
+      const existing: WFHRequest[] = JSON.parse(existingStr);
+      const updated = existing.map((w) => (w.id === id ? { ...w, status } : w));
+      localStorage.setItem(LOCAL_STORAGE_KEY_WFH, JSON.stringify(updated));
+    }
+  }
+  return true;
+}
+
+/* ---------------- TIMESHEET STORAGE ---------------- */
+export async function getTimesheetsForEmployee(employeeId: string): Promise<TimesheetEntry[]> {
+  try {
+    const q = query(
+      collection(db, "timesheets"),
+      where("employeeId", "==", employeeId)
+    );
+    const snapshot = await getDocs(q);
+    const entries: TimesheetEntry[] = [];
+    snapshot.forEach((docSnap) => {
+      entries.push({ id: docSnap.id, ...docSnap.data() } as TimesheetEntry);
+    });
+    if (entries.length > 0) return entries;
+  } catch (e) {}
+
+  if (typeof window !== "undefined") {
+    const data = localStorage.getItem(LOCAL_STORAGE_KEY_TIMESHEETS);
+    if (data) {
+      try {
+        const all: TimesheetEntry[] = JSON.parse(data);
+        return all.filter((t) => t.employeeId === employeeId);
+      } catch (e) {}
+    }
+  }
+  return [];
+}
+
+export async function saveTimesheetForEmployee(entry: TimesheetEntry): Promise<TimesheetEntry> {
+  const item: TimesheetEntry = {
+    ...entry,
+    createdAt: new Date().toISOString(),
+  };
+
+  try {
+    const docRef = await addDoc(collection(db, "timesheets"), item);
+    const created = { ...item, id: docRef.id };
+    if (typeof window !== "undefined") {
+      const existingStr = localStorage.getItem(LOCAL_STORAGE_KEY_TIMESHEETS);
+      const existing: TimesheetEntry[] = existingStr ? JSON.parse(existingStr) : [];
+      localStorage.setItem(LOCAL_STORAGE_KEY_TIMESHEETS, JSON.stringify([created, ...existing]));
+    }
+    return created;
+  } catch (e) {
+    const created = { ...item, id: `ts-${Date.now()}` };
+    if (typeof window !== "undefined") {
+      const existingStr = localStorage.getItem(LOCAL_STORAGE_KEY_TIMESHEETS);
+      const existing: TimesheetEntry[] = existingStr ? JSON.parse(existingStr) : [];
+      localStorage.setItem(LOCAL_STORAGE_KEY_TIMESHEETS, JSON.stringify([created, ...existing]));
+    }
+    return created;
+  }
 }

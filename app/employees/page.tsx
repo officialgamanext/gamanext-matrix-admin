@@ -2,11 +2,11 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import AdminLayout from "../components/AdminLayout";
 import CustomDropdown from "../components/CustomDropdown";
 import {
   getEmployeesFromStorage,
-  deleteEmployeeFromStorage,
   getDepartmentsFromStorage,
   EmployeeData,
   DepartmentItem,
@@ -19,21 +19,17 @@ import {
   Mail,
   Calendar,
   Eye,
-  Trash2,
-  X,
-  CreditCard,
   Building2,
-  ShieldCheck,
-  Briefcase,
+  ChevronRight,
 } from "lucide-react";
 
 export default function EmployeesPage() {
+  const router = useRouter();
   const [employees, setEmployees] = useState<EmployeeData[]>([]);
   const [departments, setDepartments] = useState<DepartmentItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedDepartment, setSelectedDepartment] = useState("All");
-  const [selectedEmployee, setSelectedEmployee] = useState<EmployeeData | null>(null);
 
   // Load employees & departments from Firebase / Storage
   useEffect(() => {
@@ -54,18 +50,6 @@ export default function EmployeesPage() {
     }
     loadData();
   }, []);
-
-  // Delete employee handler
-  const handleDelete = async (id?: string) => {
-    if (!id) return;
-    if (confirm("Are you sure you want to delete this employee record?")) {
-      await deleteEmployeeFromStorage(id);
-      setEmployees((prev) => prev.filter((emp) => emp.id !== id));
-      if (selectedEmployee?.id === id) {
-        setSelectedEmployee(null);
-      }
-    }
-  };
 
   // Filtered employees list
   const filteredEmployees = employees.filter((emp) => {
@@ -103,7 +87,7 @@ export default function EmployeesPage() {
                 </span>
               </div>
               <p className="text-xs text-gray-500 mt-0.5">
-                Manage staff profiles, documents, bank details, and emergency contacts.
+                Manage staff profiles, project allocations, leave approvals, WFH, and timesheets.
               </p>
             </div>
           </div>
@@ -218,228 +202,97 @@ export default function EmployeesPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {filteredEmployees.map((emp) => (
-                    <tr key={emp.id || emp.employeeId} className="hover:bg-gray-50/70 transition-colors">
-                      {/* Photo & Name */}
-                      <td className="py-3 px-4">
-                        <div className="flex items-center space-x-3">
-                          <img
-                            src={emp.profilePhotoUrl || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=250&q=80"}
-                            alt={`${emp.firstName} ${emp.lastName}`}
-                            className="w-9 h-9 rounded-full object-cover border border-gray-200 shadow-2xs"
-                          />
-                          <div>
-                            <div className="font-bold text-gray-900 text-sm">
-                              {emp.firstName} {emp.lastName}
+                  {filteredEmployees.map((emp) => {
+                    const empTargetId = emp.id || emp.employeeId;
+                    return (
+                      <tr
+                        key={empTargetId}
+                        onClick={() => router.push(`/employees/${empTargetId}`)}
+                        className="hover:bg-blue-50/40 cursor-pointer transition-colors group"
+                      >
+                        {/* Photo & Name */}
+                        <td className="py-3 px-4">
+                          <div className="flex items-center space-x-3">
+                            <img
+                              src={
+                                emp.profilePhotoUrl ||
+                                "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=250&q=80"
+                              }
+                              alt={`${emp.firstName} ${emp.lastName}`}
+                              className="w-9 h-9 rounded-full object-cover border border-gray-200 shadow-2xs group-hover:border-[#0B4FBA]"
+                            />
+                            <div>
+                              <div className="font-bold text-gray-900 text-sm group-hover:text-[#0B4FBA] transition-colors">
+                                {emp.firstName} {emp.lastName}
+                              </div>
+                              <div className="text-[11px] text-gray-500 font-mono">
+                                @{emp.username}
+                              </div>
                             </div>
-                            <div className="text-[11px] text-gray-500 font-mono">@{emp.username}</div>
                           </div>
-                        </div>
-                      </td>
+                        </td>
 
-                      {/* ID & Role */}
-                      <td className="py-3 px-4">
-                        <div className="flex items-center space-x-1.5">
-                          <span className="font-mono text-xs font-semibold text-[#0B4FBA] bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
-                            {emp.employeeId}
+                        {/* ID & Role */}
+                        <td className="py-3 px-4">
+                          <div className="flex items-center space-x-1.5">
+                            <span className="font-mono text-xs font-semibold text-[#0B4FBA] bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                              {emp.employeeId}
+                            </span>
+                            <span className="text-[10px] font-semibold bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded border border-emerald-200">
+                              {emp.jobType || "Full-Time"}
+                            </span>
+                          </div>
+                          <div className="text-gray-700 font-medium mt-1">{emp.employeeRole}</div>
+                        </td>
+
+                        {/* Department */}
+                        <td className="py-3 px-4">
+                          <span className="bg-gray-100 text-gray-700 font-medium px-2.5 py-1 rounded-md text-[11px]">
+                            {emp.department}
                           </span>
-                          <span className="text-[10px] font-semibold bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded border border-emerald-200">
-                            {emp.jobType || "Full-Time"}
-                          </span>
-                        </div>
-                        <div className="text-gray-700 font-medium mt-1">{emp.employeeRole}</div>
-                      </td>
+                        </td>
 
-                      {/* Department */}
-                      <td className="py-3 px-4">
-                        <span className="bg-gray-100 text-gray-700 font-medium px-2.5 py-1 rounded-md text-[11px]">
-                          {emp.department}
-                        </span>
-                      </td>
+                        {/* Contact */}
+                        <td className="py-3 px-4 space-y-0.5">
+                          <div className="flex items-center space-x-1.5 text-gray-700">
+                            <Phone className="w-3.5 h-3.5 text-gray-400" />
+                            <span>{emp.mobileNumber}</span>
+                          </div>
+                          <div className="flex items-center space-x-1.5 text-gray-500 text-[11px]">
+                            <Mail className="w-3.5 h-3.5 text-gray-400" />
+                            <span>{emp.email}</span>
+                          </div>
+                        </td>
 
-                      {/* Contact */}
-                      <td className="py-3 px-4 space-y-0.5">
-                        <div className="flex items-center space-x-1.5 text-gray-700">
-                          <Phone className="w-3.5 h-3.5 text-gray-400" />
-                          <span>{emp.mobileNumber}</span>
-                        </div>
-                        <div className="flex items-center space-x-1.5 text-gray-500 text-[11px]">
-                          <Mail className="w-3.5 h-3.5 text-gray-400" />
-                          <span>{emp.email}</span>
-                        </div>
-                      </td>
+                        {/* Date of Joining */}
+                        <td className="py-3 px-4 text-gray-600">
+                          <div className="flex items-center space-x-1">
+                            <Calendar className="w-3.5 h-3.5 text-gray-400" />
+                            <span>{emp.dateOfJoining}</span>
+                          </div>
+                        </td>
 
-                      {/* Date of Joining */}
-                      <td className="py-3 px-4 text-gray-600">
-                        <div className="flex items-center space-x-1">
-                          <Calendar className="w-3.5 h-3.5 text-gray-400" />
-                          <span>{emp.dateOfJoining}</span>
-                        </div>
-                      </td>
-
-                      {/* Actions */}
-                      <td className="py-3 px-4 text-right space-x-1">
-                        <button
-                          onClick={() => setSelectedEmployee(emp)}
-                          className="p-1.5 bg-blue-50 text-[#0B4FBA] hover:bg-blue-100 rounded-lg transition-colors"
-                          title="View Employee Profile"
-                        >
-                          <Eye className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(emp.id)}
-                          className="p-1.5 bg-rose-50 text-rose-600 hover:bg-rose-100 rounded-lg transition-colors"
-                          title="Delete Employee"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                        {/* Actions */}
+                        <td className="py-3 px-4 text-right">
+                          <Link
+                            href={`/employees/${empTargetId}`}
+                            onClick={(e) => e.stopPropagation()}
+                            className="inline-flex items-center space-x-1 px-3 py-1.5 bg-blue-50 text-[#0B4FBA] hover:bg-blue-100 rounded-lg text-xs font-semibold transition-colors"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                            <span>View Details</span>
+                            <ChevronRight className="w-3.5 h-3.5" />
+                          </Link>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
           )}
         </div>
       </div>
-
-      {/* Employee Details Modal Drawer */}
-      {selectedEmployee && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-3xl max-h-[90vh] rounded-2xl shadow-xl overflow-hidden flex flex-col">
-            {/* Modal Header */}
-            <div className="p-4 bg-gradient-to-r from-[#003882] to-[#0B4FBA] text-white flex items-center justify-between">
-              <div className="flex items-center space-x-3">
-                <img
-                  src={selectedEmployee.profilePhotoUrl}
-                  alt={selectedEmployee.firstName}
-                  className="w-12 h-12 rounded-full object-cover border-2 border-white"
-                />
-                <div>
-                  <h3 className="text-base font-bold">
-                    {selectedEmployee.firstName} {selectedEmployee.lastName}
-                  </h3>
-                  <div className="text-xs text-blue-100 flex items-center space-x-2">
-                    <span className="font-mono bg-blue-900/60 px-1.5 py-0.5 rounded">
-                      {selectedEmployee.employeeId}
-                    </span>
-                    <span className="bg-emerald-500/30 border border-emerald-300/40 px-1.5 py-0.5 rounded text-[10px] font-semibold">
-                      {selectedEmployee.jobType || "Full-Time"}
-                    </span>
-                    <span>• {selectedEmployee.employeeRole} ({selectedEmployee.department})</span>
-                  </div>
-                </div>
-              </div>
-              <button
-                onClick={() => setSelectedEmployee(null)}
-                className="p-1 text-blue-100 hover:text-white hover:bg-blue-800/50 rounded-lg"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Modal Content */}
-            <div className="p-6 overflow-y-auto space-y-6 text-xs text-gray-700">
-              {/* Personal & Contact Grid */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 bg-gray-50 p-4 rounded-xl border border-gray-200">
-                <div>
-                  <span className="text-gray-400 font-semibold block text-[10px] uppercase">Mobile Number</span>
-                  <span className="font-medium text-gray-900">{selectedEmployee.mobileNumber}</span>
-                </div>
-                <div>
-                  <span className="text-gray-400 font-semibold block text-[10px] uppercase">Email</span>
-                  <span className="font-medium text-gray-900">{selectedEmployee.email}</span>
-                </div>
-                <div>
-                  <span className="text-gray-400 font-semibold block text-[10px] uppercase">Date of Birth</span>
-                  <span className="font-medium text-gray-900">{selectedEmployee.dateOfBirth || "N/A"}</span>
-                </div>
-                <div>
-                  <span className="text-gray-400 font-semibold block text-[10px] uppercase">Aadhar Number</span>
-                  <span className="font-mono font-medium text-gray-900">{selectedEmployee.aadharNumber}</span>
-                </div>
-                <div>
-                  <span className="text-gray-400 font-semibold block text-[10px] uppercase">PAN Number</span>
-                  <span className="font-mono font-medium text-gray-900">{selectedEmployee.panCardNumber}</span>
-                </div>
-                <div>
-                  <span className="text-gray-400 font-semibold block text-[10px] uppercase">Address</span>
-                  <span className="font-medium text-gray-900">{selectedEmployee.address}, {selectedEmployee.city} ({selectedEmployee.pincode})</span>
-                </div>
-              </div>
-
-              {/* Uploaded ImageKit Documents */}
-              <div className="space-y-3">
-                <h4 className="font-bold text-gray-900 text-sm flex items-center space-x-1.5">
-                  <ShieldCheck className="w-4 h-4 text-[#0B4FBA]" />
-                  <span>Uploaded Documents (ImageKit CDN)</span>
-                </h4>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div className="border border-gray-200 rounded-lg p-2 text-center bg-gray-50">
-                    <span className="font-semibold block mb-1 text-[11px]">Aadhar Front</span>
-                    <img src={selectedEmployee.aadharFrontUrl} alt="Aadhar Front" className="w-full h-28 object-cover rounded" />
-                  </div>
-                  <div className="border border-gray-200 rounded-lg p-2 text-center bg-gray-50">
-                    <span className="font-semibold block mb-1 text-[11px]">Aadhar Back</span>
-                    <img src={selectedEmployee.aadharBackUrl} alt="Aadhar Back" className="w-full h-28 object-cover rounded" />
-                  </div>
-                  <div className="border border-gray-200 rounded-lg p-2 text-center bg-gray-50">
-                    <span className="font-semibold block mb-1 text-[11px]">PAN Card</span>
-                    <img src={selectedEmployee.panCardUrl} alt="PAN Card" className="w-full h-28 object-cover rounded" />
-                  </div>
-                </div>
-              </div>
-
-              {/* Bank Account Information */}
-              <div className="space-y-2 border-t border-gray-200 pt-4">
-                <h4 className="font-bold text-gray-900 text-sm flex items-center space-x-1.5">
-                  <CreditCard className="w-4 h-4 text-[#0B4FBA]" />
-                  <span>Bank Account Information</span>
-                </h4>
-                <div className="grid grid-cols-3 gap-3 bg-blue-50/50 p-3 rounded-lg border border-blue-200/60">
-                  <div>
-                    <span className="text-gray-500 text-[10px] block">Bank Name</span>
-                    <span className="font-semibold text-gray-900">{selectedEmployee.bankName || "Not Provided"}</span>
-                  </div>
-                  <div>
-                    <span className="text-gray-500 text-[10px] block">Account Number</span>
-                    <span className="font-mono font-semibold text-gray-900">{selectedEmployee.bankAccountNumber || "Not Provided"}</span>
-                  </div>
-                  <div>
-                    <span className="text-gray-500 text-[10px] block">IFSC Code</span>
-                    <span className="font-mono font-semibold text-gray-900">{selectedEmployee.bankIfscCode || "Not Provided"}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Emergency Contacts */}
-              <div className="space-y-2 border-t border-gray-200 pt-4">
-                <h4 className="font-bold text-gray-900 text-sm flex items-center space-x-1.5">
-                  <Phone className="w-4 h-4 text-[#0B4FBA]" />
-                  <span>Emergency Contacts</span>
-                </h4>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div className="p-3 bg-gray-50 rounded-lg border border-gray-200 space-y-1">
-                    <div className="font-bold text-[#0B4FBA]">Contact 1: {selectedEmployee.emergencyContact1.name || "N/A"}</div>
-                    <div>Relation: {selectedEmployee.emergencyContact1.relation}</div>
-                    <div>Mobile: {selectedEmployee.emergencyContact1.mobileNumber}</div>
-                    <div>Occupation: {selectedEmployee.emergencyContact1.occupation}</div>
-                    <div className="text-gray-500">{selectedEmployee.emergencyContact1.address}</div>
-                  </div>
-
-                  <div className="p-3 bg-gray-50 rounded-lg border border-gray-200 space-y-1">
-                    <div className="font-bold text-[#0B4FBA]">Contact 2: {selectedEmployee.emergencyContact2.name || "N/A"}</div>
-                    <div>Relation: {selectedEmployee.emergencyContact2.relation}</div>
-                    <div>Mobile: {selectedEmployee.emergencyContact2.mobileNumber}</div>
-                    <div>Occupation: {selectedEmployee.emergencyContact2.occupation}</div>
-                    <div className="text-gray-500">{selectedEmployee.emergencyContact2.address}</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </AdminLayout>
   );
 }
