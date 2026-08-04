@@ -128,6 +128,16 @@ export interface TimesheetEntry {
   createdAt?: string;
 }
 
+export interface EmployeeRequest {
+  id?: string;
+  employeeId: string;
+  requestType: "Accessories Allowance" | "Monthly Network/WiFi Bill Reimbursement";
+  amount: number;
+  monthOrDescription: string;
+  status: "Pending" | "Approved" | "Rejected" | "Amount Initiated" | "Amount Credited";
+  createdAt?: string;
+}
+
 const LOCAL_STORAGE_KEY_EMPLOYEES = "gamanext_employees_data";
 const LOCAL_STORAGE_KEY_DEPTS = "gamanext_departments_data";
 const LOCAL_STORAGE_KEY_ROLES = "gamanext_roles_data";
@@ -136,6 +146,7 @@ const LOCAL_STORAGE_KEY_PROJECTS = "gamanext_projects_data";
 const LOCAL_STORAGE_KEY_LEAVES = "gamanext_leaves_data";
 const LOCAL_STORAGE_KEY_WFH = "gamanext_wfh_data";
 const LOCAL_STORAGE_KEY_TIMESHEETS = "gamanext_timesheets_data";
+const LOCAL_STORAGE_KEY_REQUESTS = "gamanext_requests_data";
 
 /* ---------------- EMPLOYEES STORAGE HELPERS ---------------- */
 export async function getEmployeesFromStorage(): Promise<EmployeeData[]> {
@@ -690,4 +701,78 @@ export async function saveTimesheetForEmployee(entry: TimesheetEntry): Promise<T
     }
     return created;
   }
+}
+
+/* ---------------- EMPLOYEE REQUESTS STORAGE (ALLOWANCES / REIMBURSEMENTS) ---------------- */
+export async function getRequestsForEmployee(employeeId: string): Promise<EmployeeRequest[]> {
+  try {
+    const q = query(
+      collection(db, "employee_requests"),
+      where("employeeId", "==", employeeId)
+    );
+    const snapshot = await getDocs(q);
+    const requests: EmployeeRequest[] = [];
+    snapshot.forEach((docSnap) => {
+      requests.push({ id: docSnap.id, ...docSnap.data() } as EmployeeRequest);
+    });
+    if (requests.length > 0) return requests;
+  } catch (e) {}
+
+  if (typeof window !== "undefined") {
+    const data = localStorage.getItem(LOCAL_STORAGE_KEY_REQUESTS);
+    if (data) {
+      try {
+        const all: EmployeeRequest[] = JSON.parse(data);
+        return all.filter((r) => r.employeeId === employeeId);
+      } catch (e) {}
+    }
+  }
+  return [];
+}
+
+export async function saveRequestForEmployee(req: EmployeeRequest): Promise<EmployeeRequest> {
+  const item: EmployeeRequest = {
+    ...req,
+    createdAt: new Date().toISOString(),
+  };
+
+  try {
+    const docRef = await addDoc(collection(db, "employee_requests"), item);
+    const created = { ...item, id: docRef.id };
+    if (typeof window !== "undefined") {
+      const existingStr = localStorage.getItem(LOCAL_STORAGE_KEY_REQUESTS);
+      const existing: EmployeeRequest[] = existingStr ? JSON.parse(existingStr) : [];
+      localStorage.setItem(LOCAL_STORAGE_KEY_REQUESTS, JSON.stringify([created, ...existing]));
+    }
+    return created;
+  } catch (e) {
+    const created = { ...item, id: `req-${Date.now()}` };
+    if (typeof window !== "undefined") {
+      const existingStr = localStorage.getItem(LOCAL_STORAGE_KEY_REQUESTS);
+      const existing: EmployeeRequest[] = existingStr ? JSON.parse(existingStr) : [];
+      localStorage.setItem(LOCAL_STORAGE_KEY_REQUESTS, JSON.stringify([created, ...existing]));
+    }
+    return created;
+  }
+}
+
+export async function updateRequestStatusInStorage(
+  id: string,
+  status: "Pending" | "Approved" | "Rejected" | "Amount Initiated" | "Amount Credited"
+): Promise<boolean> {
+  try {
+    if (id) {
+      await updateDoc(doc(db, "employee_requests", id), { status });
+    }
+  } catch (e) {}
+
+  if (typeof window !== "undefined") {
+    const existingStr = localStorage.getItem(LOCAL_STORAGE_KEY_REQUESTS);
+    if (existingStr) {
+      const existing: EmployeeRequest[] = JSON.parse(existingStr);
+      const updated = existing.map((r) => (r.id === id ? { ...r, status } : r));
+      localStorage.setItem(LOCAL_STORAGE_KEY_REQUESTS, JSON.stringify(updated));
+    }
+  }
+  return true;
 }

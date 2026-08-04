@@ -22,12 +22,16 @@ import {
   getDepartmentsFromStorage,
   getRolesFromStorage,
   getMasterProjectsFromStorage,
+  getRequestsForEmployee,
+  saveRequestForEmployee,
+  updateRequestStatusInStorage,
   EmployeeData,
   ProjectAllocation,
   LeaveRequest,
   WFHRequest,
   TimesheetEntry,
   MasterProjectItem,
+  EmployeeRequest,
 } from "@/lib/firebase";
 import {
   ArrowLeft,
@@ -46,17 +50,17 @@ import {
   XCircle,
   AlertCircle,
   Loader2,
-  Building2,
   Save,
   Lock,
   FolderKanban,
+  FileSpreadsheet,
+  Send,
+  CheckCheck,
+  ArrowRight,
+  Receipt,
 } from "lucide-react";
 
 // Helper to determine fiscal quarter based on month (1-indexed)
-// Q1: Apr (4), May (5), Jun (6)
-// Q2: Jul (7), Aug (8), Sep (9)
-// Q3: Oct (10), Nov (11), Dec (12)
-// Q4: Jan (1), Feb (2), Mar (3)
 function getQuarterFromDateStr(dateStr: string): string {
   const date = new Date(dateStr);
   if (isNaN(date.getTime())) return "Q1";
@@ -78,7 +82,7 @@ export default function EmployeeDetailPage({
   const router = useRouter();
 
   const [activeTab, setActiveTab] = useState<
-    "profile" | "projects" | "leaves" | "wfh" | "timesheet" | "salary"
+    "profile" | "projects" | "leaves" | "wfh" | "timesheet" | "requests" | "salary"
   >("profile");
 
   const [employee, setEmployee] = useState<EmployeeData | null>(null);
@@ -129,6 +133,15 @@ export default function EmployeeDetailPage({
   const [tsTasks, setTsTasks] = useState("");
   const [addingTs, setAddingTs] = useState(false);
 
+  // Tab 6: Requests (Accessories & WiFi Bill Reimbursements)
+  const [empRequests, setEmpRequests] = useState<EmployeeRequest[]>([]);
+  const [reqType, setReqType] = useState<
+    "Accessories Allowance" | "Monthly Network/WiFi Bill Reimbursement"
+  >("Monthly Network/WiFi Bill Reimbursement");
+  const [reqAmount, setReqAmount] = useState("1000");
+  const [reqDesc, setReqDesc] = useState("");
+  const [addingReq, setAddingReq] = useState(false);
+
   // Load employee details and tab datasets
   useEffect(() => {
     async function loadData() {
@@ -140,16 +153,25 @@ export default function EmployeeDetailPage({
           setEditFormData(emp);
 
           const empKey = emp.id || emp.employeeId;
-          const [projData, leaveData, wfhData, tsData, deptsData, rolesData, mProjects] =
-            await Promise.all([
-              getProjectsForEmployee(empKey),
-              getLeavesForEmployee(empKey),
-              getWFHForEmployee(empKey),
-              getTimesheetsForEmployee(empKey),
-              getDepartmentsFromStorage(),
-              getRolesFromStorage(),
-              getMasterProjectsFromStorage(),
-            ]);
+          const [
+            projData,
+            leaveData,
+            wfhData,
+            tsData,
+            deptsData,
+            rolesData,
+            mProjects,
+            reqData,
+          ] = await Promise.all([
+            getProjectsForEmployee(empKey),
+            getLeavesForEmployee(empKey),
+            getWFHForEmployee(empKey),
+            getTimesheetsForEmployee(empKey),
+            getDepartmentsFromStorage(),
+            getRolesFromStorage(),
+            getMasterProjectsFromStorage(),
+            getRequestsForEmployee(empKey),
+          ]);
 
           setProjects(projData);
           setLeaves(leaveData);
@@ -158,6 +180,7 @@ export default function EmployeeDetailPage({
           setDepartments(deptsData.map((d) => d.name));
           setRoles(rolesData.map((r) => r.name));
           setMasterProjects(mProjects);
+          setEmpRequests(reqData);
 
           if (mProjects.length > 0) {
             setNewProjectName(mProjects[0].name);
@@ -366,6 +389,60 @@ export default function EmployeeDetailPage({
     }
   };
 
+  // Submit Employee Request Handler (Accessories & WiFi Bill)
+  const handleAddRequest = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!employee || !reqAmount || !reqDesc.trim()) {
+      alert("Please fill in amount and description.");
+      return;
+    }
+
+    // One-time check for Accessories Allowance
+    if (reqType === "Accessories Allowance") {
+      const hasExistingAccessories = empRequests.some(
+        (r) => r.requestType === "Accessories Allowance" && r.status !== "Rejected"
+      );
+      if (hasExistingAccessories) {
+        alert(
+          "One-Time Limit Reached! Accessories Allowance can only be availed ONCE per employee."
+        );
+        return;
+      }
+    }
+
+    setAddingReq(true);
+    try {
+      const empKey = employee.id || employee.employeeId;
+      const created = await saveRequestForEmployee({
+        employeeId: empKey,
+        requestType: reqType,
+        amount: parseFloat(reqAmount) || 0,
+        monthOrDescription: reqDesc.trim(),
+        status: "Pending",
+      });
+
+      setEmpRequests((prev) => [created, ...prev]);
+      setReqDesc("");
+      setReqAmount("1000");
+    } catch (err) {
+      console.error("Submit request error:", err);
+    } finally {
+      setAddingReq(false);
+    }
+  };
+
+  // Step-by-Step Request Status Workflow Update
+  const handleUpdateRequestStatus = async (
+    reqId?: string,
+    nextStatus?: "Pending" | "Approved" | "Rejected" | "Amount Initiated" | "Amount Credited"
+  ) => {
+    if (!reqId || !nextStatus) return;
+    await updateRequestStatusInStorage(reqId, nextStatus);
+    setEmpRequests((prev) =>
+      prev.map((r) => (r.id === reqId ? { ...r, status: nextStatus } : r))
+    );
+  };
+
   // Combine master projects and assigned projects for dropdowns
   const masterProjectNames = masterProjects.map((mp) => mp.name);
   const projectDropdownOptions =
@@ -522,6 +599,18 @@ export default function EmployeeDetailPage({
           >
             <Clock className="w-3.5 h-3.5" />
             <span>Timesheet ({timesheets.length})</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab("requests")}
+            className={`px-4 py-2 text-xs font-semibold rounded-lg transition-all flex items-center space-x-1.5 whitespace-nowrap ${
+              activeTab === "requests"
+                ? "bg-[#0B4FBA] text-white shadow-xs"
+                : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+            }`}
+          >
+            <Receipt className="w-3.5 h-3.5" />
+            <span>Requests ({empRequests.length})</span>
           </button>
 
           <button
@@ -1277,7 +1366,7 @@ export default function EmployeeDetailPage({
           </div>
         )}
 
-        {/* TAB 5: DAILY TIMESHEET (Today's Date Auto-selected & Locked) */}
+        {/* TAB 5: DAILY TIMESHEET */}
         {activeTab === "timesheet" && (
           <div className="space-y-4">
             {/* Add Daily Timesheet Form */}
@@ -1405,7 +1494,238 @@ export default function EmployeeDetailPage({
           </div>
         )}
 
-        {/* TAB 6: SALARY & PAYROLL */}
+        {/* TAB 6: REQUESTS (ACCESSORIES & WIFI BILL REIMBURSEMENT) */}
+        {activeTab === "requests" && (
+          <div className="space-y-4">
+            {/* Rules Banner */}
+            <div className="bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200/80 rounded-xl p-4 text-xs text-emerald-950 space-y-1.5">
+              <div className="font-bold text-sm text-emerald-900 flex items-center space-x-2">
+                <Receipt className="w-4 h-4 text-emerald-700" />
+                <span>Employee Reimbursements & Allowances Rules</span>
+              </div>
+              <ul className="list-disc list-inside space-y-0.5 text-[11px] text-emerald-800">
+                <li>
+                  <strong className="text-emerald-950">Accessories Allowance:</strong> One-Time limit per employee (e.g., keyboard, mouse, headset).
+                </li>
+                <li>
+                  <strong className="text-emerald-950">Monthly Network/WiFi Bill:</strong> Can be requested every month for home office internet support.
+                </li>
+                <li>
+                  <strong className="text-emerald-950">Payout Workflow:</strong> Pending → Accept/Reject → Amount Initiated → Amount Credited.
+                </li>
+              </ul>
+            </div>
+
+            {/* Add Request Form */}
+            <form
+              onSubmit={handleAddRequest}
+              className="bg-white p-5 rounded-xl border border-gray-200/80 shadow-2xs space-y-3"
+            >
+              <div className="flex items-center space-x-2 border-b border-gray-100 pb-2">
+                <Receipt className="w-4 h-4 text-[#0B4FBA]" />
+                <h2 className="text-sm font-bold text-gray-900">Submit Allowance / Reimbursement Request</h2>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                <div>
+                  <label className="block font-semibold text-gray-700 mb-1">Request Type</label>
+                  <CustomDropdown
+                    options={[
+                      "Monthly Network/WiFi Bill Reimbursement",
+                      "Accessories Allowance",
+                    ]}
+                    value={reqType}
+                    onChange={(val: any) => setReqType(val)}
+                    placeholder="Select request type"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-gray-700 mb-1">Claim Amount (₹)</label>
+                  <input
+                    type="number"
+                    min="100"
+                    step="100"
+                    required
+                    value={reqAmount}
+                    onChange={(e) => setReqAmount(e.target.value)}
+                    placeholder="e.g. 1000"
+                    className="w-full px-3 py-1.5 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-[#0B4FBA]/30 bg-white font-mono"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-gray-700 mb-1">
+                    {reqType === "Monthly Network/WiFi Bill Reimbursement"
+                      ? "Month / Period"
+                      : "Accessories Description"}
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    autoComplete="off"
+                    value={reqDesc}
+                    onChange={(e) => setReqDesc(e.target.value)}
+                    placeholder={
+                      reqType === "Monthly Network/WiFi Bill Reimbursement"
+                        ? "e.g. WiFi Bill for July 2026"
+                        : "e.g. Ergonomic Keyboard & Wireless Mouse"
+                    }
+                    className="w-full px-3 py-1.5 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-[#0B4FBA]/30 bg-white"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end pt-1">
+                <button
+                  type="submit"
+                  disabled={addingReq || !reqDesc.trim() || !reqAmount}
+                  className="px-4 py-1.5 bg-[#0B4FBA] hover:bg-[#003882] text-white text-xs font-semibold rounded-lg shadow-xs transition-all flex items-center space-x-1.5 disabled:opacity-50"
+                >
+                  {addingReq ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Send className="w-3.5 h-3.5" />
+                  )}
+                  <span>Submit Request</span>
+                </button>
+              </div>
+            </form>
+
+            {/* Requests History Table */}
+            <div className="bg-white rounded-xl border border-gray-200/80 shadow-2xs overflow-hidden">
+              <div className="p-3 border-b border-gray-100 font-bold text-xs text-gray-800 bg-gray-50/50 flex justify-between items-center">
+                <span>Reimbursement & Allowance Requests ({empRequests.length})</span>
+                <span className="text-[11px] text-gray-500 font-normal">
+                  Step-by-step approval & payout tracking
+                </span>
+              </div>
+
+              {empRequests.length === 0 ? (
+                <div className="p-8 text-center text-xs text-gray-400">
+                  No requests submitted yet. Use the form above to claim WiFi bill or accessories allowance.
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-gray-50 text-gray-500 uppercase tracking-wider text-[10px] font-bold border-b border-gray-200">
+                      <tr>
+                        <th className="py-3 px-4">Request Type</th>
+                        <th className="py-3 px-4">Amount</th>
+                        <th className="py-3 px-4">Month / Details</th>
+                        <th className="py-3 px-4">Status</th>
+                        <th className="py-3 px-4 text-right">Workflow Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {empRequests.map((req) => (
+                        <tr key={req.id} className="hover:bg-gray-50/70 transition-colors">
+                          <td className="py-3 px-4 font-bold text-gray-900 flex items-center space-x-2">
+                            <Receipt className="w-4 h-4 text-[#0B4FBA]" />
+                            <span>{req.requestType}</span>
+                          </td>
+
+                          <td className="py-3 px-4 font-mono font-bold text-emerald-700">
+                            ₹{req.amount.toLocaleString("en-IN")}
+                          </td>
+
+                          <td className="py-3 px-4 text-gray-700">{req.monthOrDescription}</td>
+
+                          {/* Status Badge */}
+                          <td className="py-3 px-4">
+                            {req.status === "Pending" && (
+                              <span className="bg-amber-50 text-amber-700 font-semibold px-2 py-0.5 rounded border border-amber-200 text-[10px] inline-flex items-center space-x-1">
+                                <Clock className="w-3 h-3" />
+                                <span>Pending Approval</span>
+                              </span>
+                            )}
+                            {req.status === "Approved" && (
+                              <span className="bg-blue-50 text-[#0B4FBA] font-semibold px-2 py-0.5 rounded border border-blue-200 text-[10px] inline-flex items-center space-x-1">
+                                <CheckCircle2 className="w-3 h-3" />
+                                <span>Accepted / Approved</span>
+                              </span>
+                            )}
+                            {req.status === "Rejected" && (
+                              <span className="bg-rose-50 text-rose-700 font-semibold px-2 py-0.5 rounded border border-rose-200 text-[10px] inline-flex items-center space-x-1">
+                                <XCircle className="w-3 h-3" />
+                                <span>Rejected</span>
+                              </span>
+                            )}
+                            {req.status === "Amount Initiated" && (
+                              <span className="bg-purple-50 text-purple-700 font-semibold px-2 py-0.5 rounded border border-purple-200 text-[10px] inline-flex items-center space-x-1">
+                                <ArrowRight className="w-3 h-3" />
+                                <span>Amount Initiated</span>
+                              </span>
+                            )}
+                            {req.status === "Amount Credited" && (
+                              <span className="bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded border border-emerald-300 text-[10px] inline-flex items-center space-x-1">
+                                <CheckCheck className="w-3.5 h-3.5 text-emerald-600" />
+                                <span>Amount Credited</span>
+                              </span>
+                            )}
+                          </td>
+
+                          {/* Step-by-Step Workflow Action Buttons */}
+                          <td className="py-3 px-4 text-right space-x-1">
+                            {req.status === "Pending" && (
+                              <>
+                                <button
+                                  onClick={() => handleUpdateRequestStatus(req.id, "Approved")}
+                                  className="px-2.5 py-1 bg-emerald-600 text-white rounded text-[11px] font-semibold hover:bg-emerald-700 transition-colors shadow-2xs"
+                                >
+                                  Accept
+                                </button>
+                                <button
+                                  onClick={() => handleUpdateRequestStatus(req.id, "Rejected")}
+                                  className="px-2.5 py-1 bg-rose-600 text-white rounded text-[11px] font-semibold hover:bg-rose-700 transition-colors shadow-2xs"
+                                >
+                                  Reject
+                                </button>
+                              </>
+                            )}
+
+                            {req.status === "Approved" && (
+                              <button
+                                onClick={() => handleUpdateRequestStatus(req.id, "Amount Initiated")}
+                                className="px-3 py-1 bg-purple-600 text-white rounded text-[11px] font-semibold hover:bg-purple-700 transition-colors shadow-2xs flex items-center space-x-1 ml-auto"
+                              >
+                                <span>Initiate Amount</span>
+                                <ArrowRight className="w-3 h-3" />
+                              </button>
+                            )}
+
+                            {req.status === "Amount Initiated" && (
+                              <button
+                                onClick={() => handleUpdateRequestStatus(req.id, "Amount Credited")}
+                                className="px-3 py-1 bg-emerald-600 text-white rounded text-[11px] font-semibold hover:bg-emerald-700 transition-colors shadow-2xs flex items-center space-x-1 ml-auto"
+                              >
+                                <CheckCheck className="w-3.5 h-3.5" />
+                                <span>Credit Amount</span>
+                              </button>
+                            )}
+
+                            {req.status === "Amount Credited" && (
+                              <span className="text-[11px] font-semibold text-emerald-700 flex items-center space-x-1 justify-end">
+                                <CheckCheck className="w-3.5 h-3.5" />
+                                <span>Completed</span>
+                              </span>
+                            )}
+
+                            {req.status === "Rejected" && (
+                              <span className="text-[11px] text-gray-400 italic">Dismissed</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* TAB 7: SALARY & PAYROLL */}
         {activeTab === "salary" && (
           <div className="bg-white p-8 rounded-xl border border-gray-200/80 shadow-2xs text-center space-y-3">
             <DollarSign className="w-10 h-10 text-[#0B4FBA] mx-auto p-2 bg-blue-50 border border-blue-200 rounded-full" />
