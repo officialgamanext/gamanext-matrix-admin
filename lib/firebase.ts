@@ -138,6 +138,24 @@ export interface EmployeeRequest {
   createdAt?: string;
 }
 
+export interface YearlyReview {
+  id?: string;
+  employeeId: string;
+  year: string;
+  rating: number; // Out of 10
+  feedback: string;
+  createdAt?: string;
+}
+
+export interface PerformanceBandRecord {
+  id?: string;
+  employeeId: string;
+  year: string;
+  band: "Band A" | "Band B" | "Band C" | "Band D";
+  remarks: string;
+  createdAt?: string;
+}
+
 const LOCAL_STORAGE_KEY_EMPLOYEES = "gamanext_employees_data";
 const LOCAL_STORAGE_KEY_DEPTS = "gamanext_departments_data";
 const LOCAL_STORAGE_KEY_ROLES = "gamanext_roles_data";
@@ -147,6 +165,8 @@ const LOCAL_STORAGE_KEY_LEAVES = "gamanext_leaves_data";
 const LOCAL_STORAGE_KEY_WFH = "gamanext_wfh_data";
 const LOCAL_STORAGE_KEY_TIMESHEETS = "gamanext_timesheets_data";
 const LOCAL_STORAGE_KEY_REQUESTS = "gamanext_requests_data";
+const LOCAL_STORAGE_KEY_REVIEWS = "gamanext_reviews_data";
+const LOCAL_STORAGE_KEY_BANDS = "gamanext_bands_data";
 
 /* ---------------- EMPLOYEES STORAGE HELPERS ---------------- */
 export async function getEmployeesFromStorage(): Promise<EmployeeData[]> {
@@ -775,4 +795,110 @@ export async function updateRequestStatusInStorage(
     }
   }
   return true;
+}
+
+/* ---------------- YEARLY REVIEWS STORAGE ---------------- */
+export async function getYearlyReviewsForEmployee(employeeId: string): Promise<YearlyReview[]> {
+  try {
+    const q = query(
+      collection(db, "yearly_reviews"),
+      where("employeeId", "==", employeeId)
+    );
+    const snapshot = await getDocs(q);
+    const reviews: YearlyReview[] = [];
+    snapshot.forEach((docSnap) => {
+      reviews.push({ id: docSnap.id, ...docSnap.data() } as YearlyReview);
+    });
+    if (reviews.length > 0) return reviews;
+  } catch (e) {}
+
+  if (typeof window !== "undefined") {
+    const data = localStorage.getItem(LOCAL_STORAGE_KEY_REVIEWS);
+    if (data) {
+      try {
+        const all: YearlyReview[] = JSON.parse(data);
+        return all.filter((r) => r.employeeId === employeeId);
+      } catch (e) {}
+    }
+  }
+  return [];
+}
+
+export async function saveYearlyReviewForEmployee(review: YearlyReview): Promise<YearlyReview> {
+  const item: YearlyReview = {
+    ...review,
+    createdAt: new Date().toISOString(),
+  };
+
+  try {
+    const docRef = await addDoc(collection(db, "yearly_reviews"), item);
+    const created = { ...item, id: docRef.id };
+    if (typeof window !== "undefined") {
+      const existingStr = localStorage.getItem(LOCAL_STORAGE_KEY_REVIEWS);
+      const existing: YearlyReview[] = existingStr ? JSON.parse(existingStr) : [];
+      localStorage.setItem(LOCAL_STORAGE_KEY_REVIEWS, JSON.stringify([created, ...existing]));
+    }
+    return created;
+  } catch (e) {
+    const created = { ...item, id: `rev-${Date.now()}` };
+    if (typeof window !== "undefined") {
+      const existingStr = localStorage.getItem(LOCAL_STORAGE_KEY_REVIEWS);
+      const existing: YearlyReview[] = existingStr ? JSON.parse(existingStr) : [];
+      localStorage.setItem(LOCAL_STORAGE_KEY_REVIEWS, JSON.stringify([created, ...existing]));
+    }
+    return created;
+  }
+}
+
+/* ---------------- PERFORMANCE BANDS STORAGE ---------------- */
+export async function getPerformanceBandsForEmployee(employeeId: string): Promise<PerformanceBandRecord[]> {
+  try {
+    const q = query(
+      collection(db, "performance_bands"),
+      where("employeeId", "==", employeeId)
+    );
+    const snapshot = await getDocs(q);
+    const bands: PerformanceBandRecord[] = [];
+    snapshot.forEach((docSnap) => {
+      bands.push({ id: docSnap.id, ...docSnap.data() } as PerformanceBandRecord);
+    });
+    if (bands.length > 0) return bands;
+  } catch (e) {}
+
+  if (typeof window !== "undefined") {
+    const data = localStorage.getItem(LOCAL_STORAGE_KEY_BANDS);
+    if (data) {
+      try {
+        const all: PerformanceBandRecord[] = JSON.parse(data);
+        return all.filter((b) => b.employeeId === employeeId);
+      } catch (e) {}
+    }
+  }
+  return [];
+}
+
+export async function savePerformanceBandForEmployee(bandRecord: PerformanceBandRecord): Promise<PerformanceBandRecord> {
+  const item: PerformanceBandRecord = {
+    ...bandRecord,
+    createdAt: new Date().toISOString(),
+  };
+
+  try {
+    const docRef = await addDoc(collection(db, "performance_bands"), item);
+    const created = { ...item, id: docRef.id };
+    if (typeof window !== "undefined") {
+      const existingStr = localStorage.getItem(LOCAL_STORAGE_KEY_BANDS);
+      const existing: PerformanceBandRecord[] = existingStr ? JSON.parse(existingStr) : [];
+      localStorage.setItem(LOCAL_STORAGE_KEY_BANDS, JSON.stringify([created, ...existing]));
+    }
+    return created;
+  } catch (e) {
+    const created = { ...item, id: `band-${Date.now()}` };
+    if (typeof window !== "undefined") {
+      const existingStr = localStorage.getItem(LOCAL_STORAGE_KEY_BANDS);
+      const existing: PerformanceBandRecord[] = existingStr ? JSON.parse(existingStr) : [];
+      localStorage.setItem(LOCAL_STORAGE_KEY_BANDS, JSON.stringify([created, ...existing]));
+    }
+    return created;
+  }
 }

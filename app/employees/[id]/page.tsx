@@ -25,6 +25,10 @@ import {
   getRequestsForEmployee,
   saveRequestForEmployee,
   updateRequestStatusInStorage,
+  getYearlyReviewsForEmployee,
+  saveYearlyReviewForEmployee,
+  getPerformanceBandsForEmployee,
+  savePerformanceBandForEmployee,
   EmployeeData,
   ProjectAllocation,
   LeaveRequest,
@@ -32,6 +36,8 @@ import {
   TimesheetEntry,
   MasterProjectItem,
   EmployeeRequest,
+  YearlyReview,
+  PerformanceBandRecord,
 } from "@/lib/firebase";
 import {
   ArrowLeft,
@@ -53,11 +59,14 @@ import {
   Save,
   Lock,
   FolderKanban,
-  FileSpreadsheet,
   Send,
   CheckCheck,
   ArrowRight,
   Receipt,
+  Star,
+  Award,
+  TrendingUp,
+  Sparkles,
 } from "lucide-react";
 
 // Helper to determine fiscal quarter based on month (1-indexed)
@@ -82,7 +91,7 @@ export default function EmployeeDetailPage({
   const router = useRouter();
 
   const [activeTab, setActiveTab] = useState<
-    "profile" | "projects" | "leaves" | "wfh" | "timesheet" | "requests" | "salary"
+    "profile" | "projects" | "leaves" | "wfh" | "timesheet" | "requests" | "performance" | "salary"
   >("profile");
 
   const [employee, setEmployee] = useState<EmployeeData | null>(null);
@@ -142,6 +151,22 @@ export default function EmployeeDetailPage({
   const [reqDesc, setReqDesc] = useState("");
   const [addingReq, setAddingReq] = useState(false);
 
+  // Tab 7: Yearly Reviews & Performance Bands
+  const [reviews, setReviews] = useState<YearlyReview[]>([]);
+  const [bands, setBands] = useState<PerformanceBandRecord[]>([]);
+
+  // Review Form
+  const [reviewYear, setReviewYear] = useState("2026");
+  const [reviewRating, setReviewRating] = useState("9.0");
+  const [reviewFeedback, setReviewFeedback] = useState("");
+  const [addingReview, setAddingReview] = useState(false);
+
+  // Performance Band Form
+  const [bandYear, setBandYear] = useState("2026");
+  const [bandValue, setBandValue] = useState<"Band A" | "Band B" | "Band C" | "Band D">("Band A");
+  const [bandRemarks, setBandRemarks] = useState("");
+  const [addingBand, setAddingBand] = useState(false);
+
   // Load employee details and tab datasets
   useEffect(() => {
     async function loadData() {
@@ -162,6 +187,8 @@ export default function EmployeeDetailPage({
             rolesData,
             mProjects,
             reqData,
+            revData,
+            bandData,
           ] = await Promise.all([
             getProjectsForEmployee(empKey),
             getLeavesForEmployee(empKey),
@@ -171,6 +198,8 @@ export default function EmployeeDetailPage({
             getRolesFromStorage(),
             getMasterProjectsFromStorage(),
             getRequestsForEmployee(empKey),
+            getYearlyReviewsForEmployee(empKey),
+            getPerformanceBandsForEmployee(empKey),
           ]);
 
           setProjects(projData);
@@ -181,6 +210,8 @@ export default function EmployeeDetailPage({
           setRoles(rolesData.map((r) => r.name));
           setMasterProjects(mProjects);
           setEmpRequests(reqData);
+          setReviews(revData);
+          setBands(bandData);
 
           if (mProjects.length > 0) {
             setNewProjectName(mProjects[0].name);
@@ -443,6 +474,54 @@ export default function EmployeeDetailPage({
     );
   };
 
+  // Save Yearly Review Handler
+  const handleSaveReview = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!employee || !reviewFeedback.trim()) return;
+
+    setAddingReview(true);
+    try {
+      const empKey = employee.id || employee.employeeId;
+      const created = await saveYearlyReviewForEmployee({
+        employeeId: empKey,
+        year: reviewYear,
+        rating: parseFloat(reviewRating) || 8.0,
+        feedback: reviewFeedback.trim(),
+      });
+
+      setReviews((prev) => [created, ...prev.filter((r) => r.year !== reviewYear)]);
+      setReviewFeedback("");
+    } catch (err) {
+      console.error("Save review error:", err);
+    } finally {
+      setAddingReview(false);
+    }
+  };
+
+  // Save Performance Band Handler
+  const handleSaveBand = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!employee || !bandRemarks.trim()) return;
+
+    setAddingBand(true);
+    try {
+      const empKey = employee.id || employee.employeeId;
+      const created = await savePerformanceBandForEmployee({
+        employeeId: empKey,
+        year: bandYear,
+        band: bandValue,
+        remarks: bandRemarks.trim(),
+      });
+
+      setBands((prev) => [created, ...prev.filter((b) => b.year !== bandYear)]);
+      setBandRemarks("");
+    } catch (err) {
+      console.error("Save band error:", err);
+    } finally {
+      setAddingBand(false);
+    }
+  };
+
   // Combine master projects and assigned projects for dropdowns
   const masterProjectNames = masterProjects.map((mp) => mp.name);
   const projectDropdownOptions =
@@ -611,6 +690,18 @@ export default function EmployeeDetailPage({
           >
             <Receipt className="w-3.5 h-3.5" />
             <span>Requests ({empRequests.length})</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab("performance")}
+            className={`px-4 py-2 text-xs font-semibold rounded-lg transition-all flex items-center space-x-1.5 whitespace-nowrap ${
+              activeTab === "performance"
+                ? "bg-[#0B4FBA] text-white shadow-xs"
+                : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+            }`}
+          >
+            <Award className="w-3.5 h-3.5" />
+            <span>Performance & Ratings ({reviews.length})</span>
           </button>
 
           <button
@@ -1725,7 +1816,280 @@ export default function EmployeeDetailPage({
           </div>
         )}
 
-        {/* TAB 7: SALARY & PAYROLL */}
+        {/* TAB 7: YEARLY PERFORMANCE REVIEWS & BANDS */}
+        {activeTab === "performance" && (
+          <div className="space-y-6">
+            {/* SECTION 1: YEARLY REVIEW & RATING (OUT OF 10) */}
+            <div className="space-y-4">
+              <form
+                onSubmit={handleSaveReview}
+                className="bg-white p-5 rounded-xl border border-gray-200/80 shadow-2xs space-y-3"
+              >
+                <div className="flex items-center space-x-2 border-b border-gray-100 pb-2">
+                  <Star className="w-4 h-4 text-amber-500" />
+                  <h2 className="text-sm font-bold text-gray-900">Add Yearly Review & Rating (Out of 10)</h2>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                  <div>
+                    <label className="block font-semibold text-gray-700 mb-1">Review Year</label>
+                    <CustomDropdown
+                      options={["2026", "2025", "2024", "2023"]}
+                      value={reviewYear}
+                      onChange={(val) => setReviewYear(val)}
+                      placeholder="Select year"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-semibold text-gray-700 mb-1">Rating Score (Out of 10)</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      min="1"
+                      max="10"
+                      required
+                      value={reviewRating}
+                      onChange={(e) => setReviewRating(e.target.value)}
+                      placeholder="e.g. 9.5"
+                      className="w-full px-3 py-1.5 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-[#0B4FBA]/30 bg-white font-mono font-bold"
+                    />
+                  </div>
+
+                  <div className="sm:col-span-3">
+                    <label className="block font-semibold text-gray-700 mb-1">Review Comments / Feedback</label>
+                    <input
+                      type="text"
+                      required
+                      autoComplete="off"
+                      value={reviewFeedback}
+                      onChange={(e) => setReviewFeedback(e.target.value)}
+                      placeholder="e.g. Exceptional leadership, delivered core modules ahead of schedule."
+                      className="w-full px-3 py-1.5 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-[#0B4FBA]/30 bg-white"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex justify-end pt-1">
+                  <button
+                    type="submit"
+                    disabled={addingReview || !reviewFeedback.trim()}
+                    className="px-4 py-1.5 bg-[#0B4FBA] hover:bg-[#003882] text-white text-xs font-semibold rounded-lg shadow-xs transition-all flex items-center space-x-1.5 disabled:opacity-50"
+                  >
+                    {addingReview ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Plus className="w-3.5 h-3.5" />
+                    )}
+                    <span>Save Yearly Review</span>
+                  </button>
+                </div>
+              </form>
+
+              {/* Reviews History Table */}
+              <div className="bg-white rounded-xl border border-gray-200/80 shadow-2xs overflow-hidden">
+                <div className="p-3 border-b border-gray-100 font-bold text-xs text-gray-800 bg-gray-50/50 flex justify-between items-center">
+                  <div className="flex items-center space-x-2">
+                    <Star className="w-4 h-4 text-amber-500 fill-amber-400" />
+                    <span>Yearly Review & Rating History ({reviews.length})</span>
+                  </div>
+                  <span className="text-[11px] text-gray-500 font-normal">Score out of 10.0</span>
+                </div>
+
+                {reviews.length === 0 ? (
+                  <div className="p-8 text-center text-xs text-gray-400">
+                    No yearly reviews recorded yet. Use the form above to add an annual review.
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs">
+                      <thead className="bg-gray-50 text-gray-500 uppercase tracking-wider text-[10px] font-bold border-b border-gray-200">
+                        <tr>
+                          <th className="py-3 px-4">Year</th>
+                          <th className="py-3 px-4">Rating Score</th>
+                          <th className="py-3 px-4">Reviewer Comments</th>
+                          <th className="py-3 px-4">Date Logged</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {reviews.map((rev) => (
+                          <tr key={rev.id || rev.year} className="hover:bg-gray-50/70 transition-colors">
+                            <td className="py-3 px-4 font-mono font-bold text-[#0B4FBA]">{rev.year}</td>
+
+                            {/* Score / 10 + Star Badge */}
+                            <td className="py-3 px-4">
+                              <div className="flex items-center space-x-2">
+                                <span className="font-mono font-extrabold text-sm text-amber-600 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                                  {rev.rating} / 10
+                                </span>
+                                <div className="flex text-amber-400">
+                                  {Array.from({ length: Math.min(5, Math.round(rev.rating / 2)) }).map((_, i) => (
+                                    <Star key={i} className="w-3.5 h-3.5 fill-amber-400" />
+                                  ))}
+                                </div>
+                              </div>
+                            </td>
+
+                            <td className="py-3 px-4 text-gray-700 max-w-md">{rev.feedback}</td>
+
+                            <td className="py-3 px-4 text-gray-500 text-[11px]">
+                              {rev.createdAt ? new Date(rev.createdAt).toLocaleDateString() : "Saved"}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* SECTION 2: PERFORMANCE BAND */}
+            <div className="space-y-4">
+              <form
+                onSubmit={handleSaveBand}
+                className="bg-white p-5 rounded-xl border border-gray-200/80 shadow-2xs space-y-3"
+              >
+                <div className="flex items-center space-x-2 border-b border-gray-100 pb-2">
+                  <Award className="w-4 h-4 text-[#0B4FBA]" />
+                  <h2 className="text-sm font-bold text-gray-900">Assign Yearly Performance Band</h2>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                  <div>
+                    <label className="block font-semibold text-gray-700 mb-1">Performance Year</label>
+                    <CustomDropdown
+                      options={["2026", "2025", "2024", "2023"]}
+                      value={bandYear}
+                      onChange={(val) => setBandYear(val)}
+                      placeholder="Select year"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-semibold text-gray-700 mb-1">Performance Band</label>
+                    <CustomDropdown
+                      options={[
+                        "Band A",
+                        "Band B",
+                        "Band C",
+                        "Band D",
+                      ]}
+                      value={bandValue}
+                      onChange={(val: any) => setBandValue(val)}
+                      placeholder="Select performance band"
+                    />
+                  </div>
+
+                  <div className="sm:col-span-3">
+                    <label className="block font-semibold text-gray-700 mb-1">Performance Remarks / Goals Summary</label>
+                    <input
+                      type="text"
+                      required
+                      autoComplete="off"
+                      value={bandRemarks}
+                      onChange={(e) => setBandRemarks(e.target.value)}
+                      placeholder="e.g. Exceeded annual KPI targets across all project deliverables."
+                      className="w-full px-3 py-1.5 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-[#0B4FBA]/30 bg-white"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex justify-end pt-1">
+                  <button
+                    type="submit"
+                    disabled={addingBand || !bandRemarks.trim()}
+                    className="px-4 py-1.5 bg-[#0B4FBA] hover:bg-[#003882] text-white text-xs font-semibold rounded-lg shadow-xs transition-all flex items-center space-x-1.5 disabled:opacity-50"
+                  >
+                    {addingBand ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Plus className="w-3.5 h-3.5" />
+                    )}
+                    <span>Save Performance Band</span>
+                  </button>
+                </div>
+              </form>
+
+              {/* Performance Band History Table */}
+              <div className="bg-white rounded-xl border border-gray-200/80 shadow-2xs overflow-hidden">
+                <div className="p-3 border-b border-gray-100 font-bold text-xs text-gray-800 bg-gray-50/50 flex justify-between items-center">
+                  <div className="flex items-center space-x-2">
+                    <Award className="w-4 h-4 text-[#0B4FBA]" />
+                    <span>Performance Band History ({bands.length})</span>
+                  </div>
+                  <span className="text-[11px] text-gray-500 font-normal">
+                    Band A (Excellent), Band B (Good), Band C (Satisfactory), Band D (Needs Improvement)
+                  </span>
+                </div>
+
+                {bands.length === 0 ? (
+                  <div className="p-8 text-center text-xs text-gray-400">
+                    No performance band assignments recorded yet. Use the form above to assign a yearly band.
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs">
+                      <thead className="bg-gray-50 text-gray-500 uppercase tracking-wider text-[10px] font-bold border-b border-gray-200">
+                        <tr>
+                          <th className="py-3 px-4">Year</th>
+                          <th className="py-3 px-4">Assigned Band</th>
+                          <th className="py-3 px-4">Level Description</th>
+                          <th className="py-3 px-4">Remarks & KPI Performance</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {bands.map((b) => (
+                          <tr key={b.id || b.year} className="hover:bg-gray-50/70 transition-colors">
+                            <td className="py-3 px-4 font-mono font-bold text-[#0B4FBA]">{b.year}</td>
+
+                            {/* Band Badge */}
+                            <td className="py-3 px-4">
+                              {b.band === "Band A" && (
+                                <span className="bg-emerald-100 text-emerald-800 border border-emerald-300 px-2.5 py-1 rounded-md font-extrabold text-xs inline-flex items-center space-x-1">
+                                  <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+                                  <span>Band A</span>
+                                </span>
+                              )}
+                              {b.band === "Band B" && (
+                                <span className="bg-blue-100 text-blue-800 border border-blue-300 px-2.5 py-1 rounded-md font-extrabold text-xs inline-flex items-center space-x-1">
+                                  <TrendingUp className="w-3.5 h-3.5 text-blue-600" />
+                                  <span>Band B</span>
+                                </span>
+                              )}
+                              {b.band === "Band C" && (
+                                <span className="bg-amber-100 text-amber-800 border border-amber-300 px-2.5 py-1 rounded-md font-extrabold text-xs inline-flex items-center space-x-1">
+                                  <span>Band C</span>
+                                </span>
+                              )}
+                              {b.band === "Band D" && (
+                                <span className="bg-rose-100 text-rose-800 border border-rose-300 px-2.5 py-1 rounded-md font-extrabold text-xs inline-flex items-center space-x-1">
+                                  <AlertCircle className="w-3.5 h-3.5 text-rose-600" />
+                                  <span>Band D</span>
+                                </span>
+                              )}
+                            </td>
+
+                            <td className="py-3 px-4 font-semibold text-gray-800">
+                              {b.band === "Band A" && "Excellent (Top Performer)"}
+                              {b.band === "Band B" && "Good (Above Average)"}
+                              {b.band === "Band C" && "Satisfactory (Average)"}
+                              {b.band === "Band D" && "Needs Improvement"}
+                            </td>
+
+                            <td className="py-3 px-4 text-gray-700 max-w-md">{b.remarks}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 8: SALARY & PAYROLL */}
         {activeTab === "salary" && (
           <div className="bg-white p-8 rounded-xl border border-gray-200/80 shadow-2xs text-center space-y-3">
             <DollarSign className="w-10 h-10 text-[#0B4FBA] mx-auto p-2 bg-blue-50 border border-blue-200 rounded-full" />
