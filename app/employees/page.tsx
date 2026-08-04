@@ -3,13 +3,18 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import AdminLayout from "../components/AdminLayout";
-import { getEmployeesFromStorage, deleteEmployeeFromStorage, EmployeeData } from "@/lib/firebase";
+import CustomDropdown from "../components/CustomDropdown";
+import {
+  getEmployeesFromStorage,
+  deleteEmployeeFromStorage,
+  getDepartmentsFromStorage,
+  EmployeeData,
+  DepartmentItem,
+} from "@/lib/firebase";
 import {
   Users,
   Plus,
   Search,
-  SlidersHorizontal,
-  Briefcase,
   Phone,
   Mail,
   Calendar,
@@ -18,26 +23,29 @@ import {
   X,
   CreditCard,
   Building2,
-  MapPin,
   ShieldCheck,
-  FileText,
-  UserCheck,
+  Briefcase,
 } from "lucide-react";
 
 export default function EmployeesPage() {
   const [employees, setEmployees] = useState<EmployeeData[]>([]);
+  const [departments, setDepartments] = useState<DepartmentItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedDepartment, setSelectedDepartment] = useState("All");
   const [selectedEmployee, setSelectedEmployee] = useState<EmployeeData | null>(null);
 
-  // Load employees from Firebase / Storage
+  // Load employees & departments from Firebase / Storage
   useEffect(() => {
     async function loadData() {
       setLoading(true);
       try {
-        const data = await getEmployeesFromStorage();
-        setEmployees(data);
+        const [empData, deptsData] = await Promise.all([
+          getEmployeesFromStorage(),
+          getDepartmentsFromStorage(),
+        ]);
+        setEmployees(empData);
+        setDepartments(deptsData);
       } catch (err) {
         console.error("Failed to load employees:", err);
       } finally {
@@ -76,10 +84,12 @@ export default function EmployeesPage() {
     return matchesSearch && matchesDept;
   });
 
+  const departmentDropdownOptions = ["All", ...departments.map((d) => d.name)];
+
   return (
     <AdminLayout>
       <div className="space-y-4">
-        {/* Top Header & Actions Bar (Shopify style) */}
+        {/* Top Header & Actions Bar */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center space-x-3">
             <div className="p-2 bg-[#0B4FBA]/10 border border-[#0B4FBA]/20 rounded-lg text-[#0B4FBA]">
@@ -101,8 +111,15 @@ export default function EmployeesPage() {
           {/* Actions */}
           <div className="flex items-center space-x-2">
             <Link
+              href="/departments-roles"
+              className="px-3.5 py-1.5 bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 text-xs font-semibold rounded-lg shadow-2xs transition-colors flex items-center space-x-1.5"
+            >
+              <Building2 className="w-3.5 h-3.5 text-[#0B4FBA]" />
+              <span>Departments & Roles</span>
+            </Link>
+            <Link
               href="/employees/add"
-              className="px-4 py-2 bg-[#0B4FBA] hover:bg-[#003882] text-white text-xs font-semibold rounded-lg shadow-sm transition-all flex items-center space-x-1.5"
+              className="px-3.5 py-1.5 bg-[#0B4FBA] hover:bg-[#003882] text-white text-xs font-semibold rounded-lg shadow-sm transition-all flex items-center space-x-1.5"
             >
               <Plus className="w-4 h-4" />
               <span>Add Employee</span>
@@ -145,23 +162,18 @@ export default function EmployeesPage() {
 
         {/* Main Data Container: Filter Toolbar & Employees List Table */}
         <div className="bg-white rounded-xl border border-gray-200/80 shadow-2xs overflow-hidden">
-          {/* Search & Department Filters */}
+          {/* Search & Custom Department Filter */}
           <div className="p-3 border-b border-gray-200/80 flex flex-col sm:flex-row items-center justify-between gap-3 bg-gray-50/40">
-            <div className="flex items-center space-x-2 w-full sm:w-auto overflow-x-auto pb-1 sm:pb-0">
-              <span className="text-xs font-semibold text-gray-500 mr-1">Department:</span>
-              {["All", "Engineering", "UI/UX Design", "Sales & Marketing", "Human Resources", "Finance"].map((dept) => (
-                <button
-                  key={dept}
-                  onClick={() => setSelectedDepartment(dept)}
-                  className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
-                    selectedDepartment === dept
-                      ? "bg-white text-[#0B4FBA] shadow-2xs border border-gray-200 font-semibold"
-                      : "text-gray-600 hover:text-gray-900 hover:bg-gray-200/50"
-                  }`}
-                >
-                  {dept}
-                </button>
-              ))}
+            <div className="flex items-center space-x-2 w-full sm:w-auto">
+              <span className="text-xs font-semibold text-gray-600 shrink-0">Filter Dept:</span>
+              <div className="w-48">
+                <CustomDropdown
+                  options={departmentDropdownOptions}
+                  value={selectedDepartment}
+                  onChange={(val) => setSelectedDepartment(val)}
+                  placeholder="All Departments"
+                />
+              </div>
             </div>
 
             <div className="relative flex-1 sm:w-64 w-full">
@@ -227,9 +239,14 @@ export default function EmployeesPage() {
 
                       {/* ID & Role */}
                       <td className="py-3 px-4">
-                        <span className="font-mono text-xs font-semibold text-[#0B4FBA] bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
-                          {emp.employeeId}
-                        </span>
+                        <div className="flex items-center space-x-1.5">
+                          <span className="font-mono text-xs font-semibold text-[#0B4FBA] bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                            {emp.employeeId}
+                          </span>
+                          <span className="text-[10px] font-semibold bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded border border-emerald-200">
+                            {emp.jobType || "Full-Time"}
+                          </span>
+                        </div>
                         <div className="text-gray-700 font-medium mt-1">{emp.employeeRole}</div>
                       </td>
 
@@ -305,6 +322,9 @@ export default function EmployeesPage() {
                   <div className="text-xs text-blue-100 flex items-center space-x-2">
                     <span className="font-mono bg-blue-900/60 px-1.5 py-0.5 rounded">
                       {selectedEmployee.employeeId}
+                    </span>
+                    <span className="bg-emerald-500/30 border border-emerald-300/40 px-1.5 py-0.5 rounded text-[10px] font-semibold">
+                      {selectedEmployee.jobType || "Full-Time"}
                     </span>
                     <span>• {selectedEmployee.employeeRole} ({selectedEmployee.department})</span>
                   </div>

@@ -34,7 +34,6 @@ export interface EmergencyContact {
 
 export interface EmployeeData {
   id?: string;
-  // Personal Info
   firstName: string;
   lastName: string;
   mobileNumber: string;
@@ -43,8 +42,6 @@ export interface EmployeeData {
   address: string;
   city: string;
   pincode: string;
-
-  // Employment Details
   employeeId: string;
   employeeRole: string;
   department: string;
@@ -53,28 +50,36 @@ export interface EmployeeData {
   password?: string;
   aadharNumber: string;
   panCardNumber: string;
-
-  // Documents & Photos (URLs from ImageKit)
   profilePhotoUrl: string;
   aadharFrontUrl: string;
   aadharBackUrl: string;
   panCardUrl: string;
-
-  // Bank Details
   bankName: string;
   bankAccountNumber: string;
   bankIfscCode: string;
-
-  // Emergency Contacts
   emergencyContact1: EmergencyContact;
   emergencyContact2: EmergencyContact;
-
+  jobType?: string;
   createdAt?: string;
 }
 
-const LOCAL_STORAGE_KEY = "gamanext_employees_data";
+export interface DepartmentItem {
+  id?: string;
+  name: string;
+  createdAt?: string;
+}
 
-// Helper to fetch all employees (first tries Firebase Firestore, falls back to local storage if offline)
+export interface RoleItem {
+  id?: string;
+  name: string;
+  createdAt?: string;
+}
+
+const LOCAL_STORAGE_KEY_EMPLOYEES = "gamanext_employees_data";
+const LOCAL_STORAGE_KEY_DEPTS = "gamanext_departments_data";
+const LOCAL_STORAGE_KEY_ROLES = "gamanext_roles_data";
+
+/* ---------------- EMPLOYEES STORAGE HELPERS ---------------- */
 export async function getEmployeesFromStorage(): Promise<EmployeeData[]> {
   try {
     const q = query(collection(db, "employees"), orderBy("createdAt", "desc"));
@@ -88,9 +93,8 @@ export async function getEmployeesFromStorage(): Promise<EmployeeData[]> {
     console.warn("Firestore fetch notice, using fallback cache:", err);
   }
 
-  // Fallback to local storage
   if (typeof window !== "undefined") {
-    const data = localStorage.getItem(LOCAL_STORAGE_KEY);
+    const data = localStorage.getItem(LOCAL_STORAGE_KEY_EMPLOYEES);
     if (data) {
       try {
         return JSON.parse(data);
@@ -103,7 +107,6 @@ export async function getEmployeesFromStorage(): Promise<EmployeeData[]> {
   return [];
 }
 
-// Helper to save new employee to Firebase Firestore
 export async function saveEmployeeToStorage(employee: EmployeeData): Promise<EmployeeData> {
   const newEmployee = {
     ...employee,
@@ -114,10 +117,9 @@ export async function saveEmployeeToStorage(employee: EmployeeData): Promise<Emp
     const docRef = await addDoc(collection(db, "employees"), newEmployee);
     const savedRecord = { ...newEmployee, id: docRef.id };
 
-    // Also mirror in local cache for offline instant view
     if (typeof window !== "undefined") {
       const existing = await getEmployeesFromStorage();
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify([savedRecord, ...existing]));
+      localStorage.setItem(LOCAL_STORAGE_KEY_EMPLOYEES, JSON.stringify([savedRecord, ...existing]));
     }
 
     return savedRecord;
@@ -126,7 +128,7 @@ export async function saveEmployeeToStorage(employee: EmployeeData): Promise<Emp
     if (typeof window !== "undefined") {
       const existing = await getEmployeesFromStorage();
       const created = { ...newEmployee, id: `emp-${Date.now()}` };
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify([created, ...existing]));
+      localStorage.setItem(LOCAL_STORAGE_KEY_EMPLOYEES, JSON.stringify([created, ...existing]));
       return created;
     }
   }
@@ -134,7 +136,6 @@ export async function saveEmployeeToStorage(employee: EmployeeData): Promise<Emp
   return newEmployee;
 }
 
-// Helper to delete employee from Firebase Firestore
 export async function deleteEmployeeFromStorage(id: string): Promise<boolean> {
   try {
     if (id) {
@@ -147,8 +148,138 @@ export async function deleteEmployeeFromStorage(id: string): Promise<boolean> {
   if (typeof window !== "undefined") {
     const existing = await getEmployeesFromStorage();
     const filtered = existing.filter((emp) => emp.id !== id);
-    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(filtered));
+    localStorage.setItem(LOCAL_STORAGE_KEY_EMPLOYEES, JSON.stringify(filtered));
   }
 
+  return true;
+}
+
+/* ---------------- DEPARTMENTS STORAGE HELPERS ---------------- */
+export async function getDepartmentsFromStorage(): Promise<DepartmentItem[]> {
+  try {
+    const q = query(collection(db, "departments"), orderBy("createdAt", "asc"));
+    const snapshot = await getDocs(q);
+    const items: DepartmentItem[] = [];
+    snapshot.forEach((docSnap) => {
+      items.push({ id: docSnap.id, ...docSnap.data() } as DepartmentItem);
+    });
+    return items;
+  } catch (err) {
+    console.warn("Firestore departments fetch notice:", err);
+  }
+
+  if (typeof window !== "undefined") {
+    const data = localStorage.getItem(LOCAL_STORAGE_KEY_DEPTS);
+    if (data) {
+      try {
+        return JSON.parse(data);
+      } catch (e) {}
+    }
+  }
+
+  return [];
+}
+
+export async function saveDepartmentToStorage(name: string): Promise<DepartmentItem> {
+  const item: DepartmentItem = {
+    name: name.trim(),
+    createdAt: new Date().toISOString(),
+  };
+
+  try {
+    const docRef = await addDoc(collection(db, "departments"), item);
+    const created = { ...item, id: docRef.id };
+
+    if (typeof window !== "undefined") {
+      const existing = await getDepartmentsFromStorage();
+      localStorage.setItem(LOCAL_STORAGE_KEY_DEPTS, JSON.stringify([...existing, created]));
+    }
+    return created;
+  } catch (err) {
+    console.error("Firestore dept save error:", err);
+    const created = { ...item, id: `dept-${Date.now()}` };
+    if (typeof window !== "undefined") {
+      const existing = await getDepartmentsFromStorage();
+      localStorage.setItem(LOCAL_STORAGE_KEY_DEPTS, JSON.stringify([...existing, created]));
+    }
+    return created;
+  }
+}
+
+export async function deleteDepartmentFromStorage(id: string): Promise<boolean> {
+  try {
+    if (id) await deleteDoc(doc(db, "departments", id));
+  } catch (e) {}
+
+  if (typeof window !== "undefined") {
+    const existing = await getDepartmentsFromStorage();
+    const filtered = existing.filter((d) => d.id !== id);
+    localStorage.setItem(LOCAL_STORAGE_KEY_DEPTS, JSON.stringify(filtered));
+  }
+  return true;
+}
+
+/* ---------------- EMPLOYEE ROLES STORAGE HELPERS ---------------- */
+export async function getRolesFromStorage(): Promise<RoleItem[]> {
+  try {
+    const q = query(collection(db, "employee_roles"), orderBy("createdAt", "asc"));
+    const snapshot = await getDocs(q);
+    const items: RoleItem[] = [];
+    snapshot.forEach((docSnap) => {
+      items.push({ id: docSnap.id, ...docSnap.data() } as RoleItem);
+    });
+    return items;
+  } catch (err) {
+    console.warn("Firestore roles fetch notice:", err);
+  }
+
+  if (typeof window !== "undefined") {
+    const data = localStorage.getItem(LOCAL_STORAGE_KEY_ROLES);
+    if (data) {
+      try {
+        return JSON.parse(data);
+      } catch (e) {}
+    }
+  }
+
+  return [];
+}
+
+export async function saveRoleToStorage(name: string): Promise<RoleItem> {
+  const item: RoleItem = {
+    name: name.trim(),
+    createdAt: new Date().toISOString(),
+  };
+
+  try {
+    const docRef = await addDoc(collection(db, "employee_roles"), item);
+    const created = { ...item, id: docRef.id };
+
+    if (typeof window !== "undefined") {
+      const existing = await getRolesFromStorage();
+      localStorage.setItem(LOCAL_STORAGE_KEY_ROLES, JSON.stringify([...existing, created]));
+    }
+    return created;
+  } catch (err) {
+    console.error("Firestore role save error:", err);
+    const created = { ...item, id: `role-${Date.now()}` };
+    if (typeof window !== "undefined") {
+      const existing = await getRolesFromStorage();
+      localStorage.setItem(LOCAL_STORAGE_KEY_ROLES, JSON.stringify([...existing, created]));
+    }
+    return created;
+  }
+}
+
+export async function deleteRoleFromStorage(id: string): Promise<boolean> {
+  try {
+    if (id) await deleteDoc(doc(db, "employee_roles", id));
+  } catch (e) {}
+
+  if (typeof window !== "undefined") {
+    const existing = await getRolesFromStorage();
+    const filtered = existing.filter((r) => r.id !== id);
+    localStorage.setItem(LOCAL_STORAGE_KEY_ROLES, JSON.stringify(filtered));
+  }
   return true;
 }

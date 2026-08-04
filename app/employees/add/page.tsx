@@ -1,9 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import AdminLayout from "../../components/AdminLayout";
-import { saveEmployeeToStorage, EmployeeData } from "@/lib/firebase";
+import CustomDropdown from "../../components/CustomDropdown";
+import CustomDatePicker from "../../components/CustomDatePicker";
+import {
+  saveEmployeeToStorage,
+  getEmployeesFromStorage,
+  getDepartmentsFromStorage,
+  getRolesFromStorage,
+  EmployeeData,
+} from "@/lib/firebase";
 import { uploadToImageKit } from "@/lib/imagekit";
 import {
   ArrowLeft,
@@ -15,6 +23,10 @@ import {
   CheckCircle2,
   Loader2,
   FileCheck,
+  Building2,
+  Eye,
+  EyeOff,
+  Lock,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -24,6 +36,13 @@ export default function AddEmployeePage() {
   // Loading state
   const [submitting, setSubmitting] = useState(false);
   const [uploadStatus, setUploadStatus] = useState("");
+
+  // Password visibility toggle
+  const [showPassword, setShowPassword] = useState(false);
+
+  // Dynamic Options from storage
+  const [departmentOptions, setDepartmentOptions] = useState<string[]>([]);
+  const [roleOptions, setRoleOptions] = useState<string[]>([]);
 
   // Form State
   const [formData, setFormData] = useState<EmployeeData>({
@@ -35,10 +54,11 @@ export default function AddEmployeePage() {
     address: "",
     city: "",
     pincode: "",
-    employeeId: `GMN-${new Date().getFullYear()}-${Math.floor(100 + Math.random() * 900)}`,
-    employeeRole: "Software Engineer",
+    employeeId: "",
+    employeeRole: "Senior Software Engineer",
     department: "Engineering",
     dateOfJoining: new Date().toISOString().split("T")[0],
+    jobType: "Full-Time",
     username: "",
     password: "",
     aadharNumber: "",
@@ -66,6 +86,59 @@ export default function AddEmployeePage() {
     },
   });
 
+  // Job Type Options
+  const jobTypeOptions = ["Full-Time", "Part-Time", "Contract", "Internship"];
+
+  // Generate 6-digit numeric Unique Employee ID & matching username on load
+  useEffect(() => {
+    async function initializeOptionsAndID() {
+      try {
+        const [depts, roles, existingEmps] = await Promise.all([
+          getDepartmentsFromStorage(),
+          getRolesFromStorage(),
+          getEmployeesFromStorage(),
+        ]);
+
+        setDepartmentOptions(depts.map((d) => d.name));
+        setRoleOptions(roles.map((r) => r.name));
+
+        const existingIds = new Set(existingEmps.map((e) => e.employeeId));
+
+        // Generate unique 6-digit numeric ID
+        let generatedId = "";
+        do {
+          generatedId = Math.floor(100000 + Math.random() * 900000).toString();
+        } while (existingIds.has(generatedId));
+
+        const generatedUsername = `${generatedId}@gamanext.com`;
+
+        setFormData((prev) => ({
+          ...prev,
+          employeeId: generatedId,
+          username: generatedUsername,
+        }));
+      } catch (err) {
+        console.error("Failed to initialize options/ID:", err);
+      }
+    }
+    initializeOptionsAndID();
+  }, []);
+
+  // Relation Options for Emergency Contacts
+  const relationOptions = [
+    "Father",
+    "Mother",
+    "Spouse",
+    "Brother",
+    "Sister",
+    "Son",
+    "Daughter",
+    "Relative",
+    "Friend",
+    "Guardian",
+    "Other",
+  ];
+
   // Image Files state
   const [profilePhotoFile, setProfilePhotoFile] = useState<File | null>(null);
   const [aadharFrontFile, setAadharFrontFile] = useState<File | null>(null);
@@ -92,10 +165,7 @@ export default function AddEmployeePage() {
   };
 
   // Generic input handler
-  const handleChange = (
-    field: keyof EmployeeData,
-    value: string
-  ) => {
+  const handleChange = (field: keyof EmployeeData, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
@@ -156,14 +226,26 @@ export default function AddEmployeePage() {
         panUrl = await uploadToImageKit(panCardFile, "pan_docs");
       }
 
+      // Ensure username is employeeId@gamanext.com
+      const autoUsername = `${formData.employeeId}@gamanext.com`;
+
       // 5. Final Employee payload
       setUploadStatus("Saving employee record to Firebase Firestore...");
       const finalPayload: EmployeeData = {
         ...formData,
-        profilePhotoUrl: profileUrl || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=250&q=80",
-        aadharFrontUrl: aadharFrontUrl || "https://images.unsplash.com/photo-1568602471122-7832951cc4c5?auto=format&fit=crop&w=400&q=80",
-        aadharBackUrl: aadharBackUrl || "https://images.unsplash.com/photo-1568602471122-7832951cc4c5?auto=format&fit=crop&w=400&q=80",
-        panCardUrl: panUrl || "https://images.unsplash.com/photo-1568602471122-7832951cc4c5?auto=format&fit=crop&w=400&q=80",
+        username: autoUsername,
+        profilePhotoUrl:
+          profileUrl ||
+          "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=250&q=80",
+        aadharFrontUrl:
+          aadharFrontUrl ||
+          "https://images.unsplash.com/photo-1568602471122-7832951cc4c5?auto=format&fit=crop&w=400&q=80",
+        aadharBackUrl:
+          aadharBackUrl ||
+          "https://images.unsplash.com/photo-1568602471122-7832951cc4c5?auto=format&fit=crop&w=400&q=80",
+        panCardUrl:
+          panUrl ||
+          "https://images.unsplash.com/photo-1568602471122-7832951cc4c5?auto=format&fit=crop&w=400&q=80",
       };
 
       await saveEmployeeToStorage(finalPayload);
@@ -180,7 +262,7 @@ export default function AddEmployeePage() {
 
   return (
     <AdminLayout>
-      <form onSubmit={handleSubmit} className="space-y-4 pb-12">
+      <form onSubmit={handleSubmit} autoComplete="off" className="space-y-4 pb-12">
         {/* Page Top Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-4 rounded-xl border border-gray-200/80 shadow-2xs">
           <div className="flex items-center space-x-3">
@@ -199,6 +281,13 @@ export default function AddEmployeePage() {
           </div>
 
           <div className="flex items-center space-x-2">
+            <Link
+              href="/departments-roles"
+              className="px-3.5 py-1.5 bg-blue-50 text-[#0B4FBA] border border-blue-200 text-xs font-semibold rounded-lg hover:bg-blue-100 transition-colors shadow-2xs flex items-center space-x-1.5"
+            >
+              <Building2 className="w-3.5 h-3.5" />
+              <span>Manage Depts & Roles</span>
+            </Link>
             <Link
               href="/employees"
               className="px-3.5 py-1.5 bg-white border border-gray-300 text-gray-700 text-xs font-medium rounded-lg hover:bg-gray-50 transition-colors shadow-2xs"
@@ -231,7 +320,9 @@ export default function AddEmployeePage() {
             <Loader2 className="w-4 h-4 animate-spin text-[#0B4FBA]" />
             <div>
               <div className="font-semibold">{uploadStatus}</div>
-              <div className="text-blue-600 text-[11px]">Please wait while images are uploaded to ImageKit and stored in Firebase.</div>
+              <div className="text-blue-600 text-[11px]">
+                Please wait while images are uploaded to ImageKit and stored in Firebase.
+              </div>
             </div>
           </div>
         )}
@@ -251,6 +342,8 @@ export default function AddEmployeePage() {
               <input
                 type="text"
                 required
+                autoComplete="off"
+                spellCheck={false}
                 value={formData.firstName}
                 onChange={(e) => handleChange("firstName", e.target.value)}
                 placeholder="e.g. Rajesh"
@@ -265,6 +358,8 @@ export default function AddEmployeePage() {
               <input
                 type="text"
                 required
+                autoComplete="off"
+                spellCheck={false}
                 value={formData.lastName}
                 onChange={(e) => handleChange("lastName", e.target.value)}
                 placeholder="e.g. Kumar"
@@ -279,6 +374,8 @@ export default function AddEmployeePage() {
               <input
                 type="tel"
                 required
+                autoComplete="off"
+                spellCheck={false}
                 value={formData.mobileNumber}
                 onChange={(e) => handleChange("mobileNumber", e.target.value)}
                 placeholder="e.g. +91 9876543210"
@@ -293,6 +390,8 @@ export default function AddEmployeePage() {
               <input
                 type="email"
                 required
+                autoComplete="off"
+                spellCheck={false}
                 value={formData.email}
                 onChange={(e) => handleChange("email", e.target.value)}
                 placeholder="e.g. rajesh@gamanext.com"
@@ -300,24 +399,24 @@ export default function AddEmployeePage() {
               />
             </div>
 
+            {/* Custom Date Picker for DOB */}
             <div>
               <label className="block text-xs font-semibold text-gray-700 mb-1">
-                Date of Birth
+                Date of Birth (Custom Calendar)
               </label>
-              <input
-                type="date"
+              <CustomDatePicker
                 value={formData.dateOfBirth}
-                onChange={(e) => handleChange("dateOfBirth", e.target.value)}
-                className="w-full px-3 py-1.5 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0B4FBA]/30 outline-none"
+                onChange={(val) => handleChange("dateOfBirth", val)}
+                placeholder="Select Date of Birth"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1">
-                City
-              </label>
+              <label className="block text-xs font-semibold text-gray-700 mb-1">City</label>
               <input
                 type="text"
+                autoComplete="off"
+                spellCheck={false}
                 value={formData.city}
                 onChange={(e) => handleChange("city", e.target.value)}
                 placeholder="e.g. Hyderabad"
@@ -326,11 +425,11 @@ export default function AddEmployeePage() {
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1">
-                Pincode
-              </label>
+              <label className="block text-xs font-semibold text-gray-700 mb-1">Pincode</label>
               <input
                 type="text"
+                autoComplete="off"
+                spellCheck={false}
                 value={formData.pincode}
                 onChange={(e) => handleChange("pincode", e.target.value)}
                 placeholder="e.g. 500033"
@@ -339,11 +438,11 @@ export default function AddEmployeePage() {
             </div>
 
             <div className="sm:col-span-2 md:col-span-4">
-              <label className="block text-xs font-semibold text-gray-700 mb-1">
-                Full Address
-              </label>
+              <label className="block text-xs font-semibold text-gray-700 mb-1">Full Address</label>
               <input
                 type="text"
+                autoComplete="off"
+                spellCheck={false}
                 value={formData.address}
                 onChange={(e) => handleChange("address", e.target.value)}
                 placeholder="e.g. Plot 42, Street 5, Jubilee Hills"
@@ -355,102 +454,137 @@ export default function AddEmployeePage() {
 
         {/* SECTION 2: Employment Details */}
         <div className="bg-white p-5 rounded-xl border border-gray-200/80 shadow-2xs space-y-4">
-          <div className="flex items-center space-x-2 border-b border-gray-100 pb-2.5">
-            <Briefcase className="w-4 h-4 text-[#0B4FBA]" />
-            <h2 className="text-sm font-bold text-gray-900">Employment & Credential Details</h2>
+          <div className="flex items-center justify-between border-b border-gray-100 pb-2.5">
+            <div className="flex items-center space-x-2">
+              <Briefcase className="w-4 h-4 text-[#0B4FBA]" />
+              <h2 className="text-sm font-bold text-gray-900">Employment & Credential Details</h2>
+            </div>
+            <Link
+              href="/departments-roles"
+              className="text-xs text-[#0B4FBA] hover:underline font-semibold flex items-center space-x-1"
+            >
+              <Building2 className="w-3.5 h-3.5" />
+              <span>+ Add Custom Role / Department</span>
+            </Link>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+            {/* Auto-generated 6-digit numeric Employee ID (Not Editable) */}
             <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1">
-                Employee ID <span className="text-rose-500">*</span>
+              <label className="block text-xs font-semibold text-gray-700 mb-1 flex items-center justify-between">
+                <span>Employee ID</span>
+                <span className="text-[10px] text-gray-400 font-normal flex items-center space-x-1">
+                  <Lock className="w-3 h-3 text-gray-400" />
+                  <span>Auto-Generated (Unique)</span>
+                </span>
               </label>
               <input
                 type="text"
-                required
+                readOnly
                 value={formData.employeeId}
-                onChange={(e) => handleChange("employeeId", e.target.value)}
-                className="w-full px-3 py-1.5 text-xs border border-gray-300 rounded-lg bg-gray-50 focus:ring-2 focus:ring-[#0B4FBA]/30 outline-none font-mono"
+                placeholder="Generating ID..."
+                className="w-full px-3 py-1.5 text-xs border border-gray-300 rounded-lg bg-gray-100 text-gray-800 font-mono font-bold cursor-not-allowed select-none outline-none shadow-2xs"
               />
             </div>
 
+            {/* Custom Dropdown for Employee Role */}
             <div>
               <label className="block text-xs font-semibold text-gray-700 mb-1">
-                Employee Role <span className="text-rose-500">*</span>
+                Employee Role (Custom Dropdown) <span className="text-rose-500">*</span>
               </label>
-              <select
+              <CustomDropdown
+                options={roleOptions}
                 value={formData.employeeRole}
-                onChange={(e) => handleChange("employeeRole", e.target.value)}
-                className="w-full px-3 py-1.5 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0B4FBA]/30 outline-none bg-white"
-              >
-                <option value="Senior Software Engineer">Senior Software Engineer</option>
-                <option value="Frontend Developer">Frontend Developer</option>
-                <option value="Backend Developer">Backend Developer</option>
-                <option value="Product Designer">Product Designer</option>
-                <option value="Sales Executive">Sales Executive</option>
-                <option value="HR Manager">HR Manager</option>
-                <option value="Operations Associate">Operations Associate</option>
-                <option value="Accountant">Accountant</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1">
-                Department <span className="text-rose-500">*</span>
-              </label>
-              <select
-                value={formData.department}
-                onChange={(e) => handleChange("department", e.target.value)}
-                className="w-full px-3 py-1.5 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0B4FBA]/30 outline-none bg-white"
-              >
-                <option value="Engineering">Engineering</option>
-                <option value="UI/UX Design">UI/UX Design</option>
-                <option value="Sales & Marketing">Sales & Marketing</option>
-                <option value="Human Resources">Human Resources</option>
-                <option value="Finance">Finance</option>
-                <option value="Operations">Operations</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1">
-                Date of Joining <span className="text-rose-500">*</span>
-              </label>
-              <input
-                type="date"
-                required
-                value={formData.dateOfJoining}
-                onChange={(e) => handleChange("dateOfJoining", e.target.value)}
-                className="w-full px-3 py-1.5 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0B4FBA]/30 outline-none"
+                onChange={(val) => handleChange("employeeRole", val)}
+                placeholder="Select Employee Role"
               />
             </div>
 
+            {/* Custom Dropdown for Department */}
             <div>
               <label className="block text-xs font-semibold text-gray-700 mb-1">
-                Username <span className="text-rose-500">*</span>
+                Department (Custom Dropdown) <span className="text-rose-500">*</span>
+              </label>
+              <CustomDropdown
+                options={departmentOptions}
+                value={formData.department}
+                onChange={(val) => handleChange("department", val)}
+                placeholder="Select Department"
+              />
+            </div>
+
+            {/* Custom Date Picker for Date of Joining */}
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 mb-1">
+                Date of Joining (Custom Calendar) <span className="text-rose-500">*</span>
+              </label>
+              <CustomDatePicker
+                value={formData.dateOfJoining}
+                onChange={(val) => handleChange("dateOfJoining", val)}
+                placeholder="Select Joining Date"
+              />
+            </div>
+
+            {/* Custom Dropdown for Job Type */}
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 mb-1">
+                Job Type <span className="text-rose-500">*</span>
+              </label>
+              <CustomDropdown
+                options={jobTypeOptions}
+                value={formData.jobType || "Full-Time"}
+                onChange={(val) => handleChange("jobType", val)}
+                placeholder="Select Job Type"
+              />
+            </div>
+
+            {/* Auto-generated Username: empId@gamanext.com (Not Editable) */}
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 mb-1 flex items-center justify-between">
+                <span>Username</span>
+                <span className="text-[10px] text-gray-400 font-normal flex items-center space-x-1">
+                  <Lock className="w-3 h-3 text-gray-400" />
+                  <span>Auto-Generated</span>
+                </span>
               </label>
               <input
                 type="text"
-                required
-                value={formData.username}
-                onChange={(e) => handleChange("username", e.target.value)}
-                placeholder="e.g. rajesh_k"
-                className="w-full px-3 py-1.5 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0B4FBA]/30 outline-none"
+                readOnly
+                value={formData.employeeId ? `${formData.employeeId}@gamanext.com` : ""}
+                placeholder="id@gamanext.com"
+                className="w-full px-3 py-1.5 text-xs border border-gray-300 rounded-lg bg-gray-100 text-gray-800 font-mono font-bold cursor-not-allowed select-none outline-none shadow-2xs"
               />
             </div>
 
+            {/* Password input with Show/Hide Eye toggle */}
             <div>
               <label className="block text-xs font-semibold text-gray-700 mb-1">
                 Password <span className="text-rose-500">*</span>
               </label>
-              <input
-                type="password"
-                required
-                value={formData.password}
-                onChange={(e) => handleChange("password", e.target.value)}
-                placeholder="••••••••"
-                className="w-full px-3 py-1.5 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0B4FBA]/30 outline-none"
-              />
+              <div className="relative flex items-center">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  required
+                  autoComplete="new-password"
+                  spellCheck={false}
+                  value={formData.password}
+                  onChange={(e) => handleChange("password", e.target.value)}
+                  placeholder="••••••••"
+                  className="w-full pl-3 pr-9 py-1.5 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0B4FBA]/30 outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-2.5 text-gray-400 hover:text-gray-600 focus:outline-none p-0.5"
+                  title={showPassword ? "Hide password" : "Show password"}
+                >
+                  {showPassword ? (
+                    <EyeOff className="w-3.5 h-3.5 text-[#0B4FBA]" />
+                  ) : (
+                    <Eye className="w-3.5 h-3.5" />
+                  )}
+                </button>
+              </div>
             </div>
 
             <div>
@@ -460,6 +594,8 @@ export default function AddEmployeePage() {
               <input
                 type="text"
                 required
+                autoComplete="off"
+                spellCheck={false}
                 value={formData.aadharNumber}
                 onChange={(e) => handleChange("aadharNumber", e.target.value)}
                 placeholder="12 digit Aadhar No"
@@ -474,6 +610,8 @@ export default function AddEmployeePage() {
               <input
                 type="text"
                 required
+                autoComplete="off"
+                spellCheck={false}
                 value={formData.panCardNumber}
                 onChange={(e) => handleChange("panCardNumber", e.target.value.toUpperCase())}
                 placeholder="10 digit PAN No"
@@ -490,7 +628,9 @@ export default function AddEmployeePage() {
               <Upload className="w-4 h-4 text-[#0B4FBA]" />
               <div>
                 <h2 className="text-sm font-bold text-gray-900">Document Uploads (ImageKit CDN)</h2>
-                <p className="text-[11px] text-gray-500">Upload profile photo, Aadhar front/back, and PAN card images.</p>
+                <p className="text-[11px] text-gray-500">
+                  Upload profile photo, Aadhar front/back, and PAN card images.
+                </p>
               </div>
             </div>
             <span className="text-[10px] bg-blue-50 text-[#0B4FBA] px-2 py-0.5 rounded border border-blue-200 font-medium">
@@ -598,11 +738,11 @@ export default function AddEmployeePage() {
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1">
-                Bank Name
-              </label>
+              <label className="block text-xs font-semibold text-gray-700 mb-1">Bank Name</label>
               <input
                 type="text"
+                autoComplete="off"
+                spellCheck={false}
                 value={formData.bankName}
                 onChange={(e) => handleChange("bankName", e.target.value)}
                 placeholder="e.g. HDFC Bank / ICICI Bank"
@@ -616,6 +756,8 @@ export default function AddEmployeePage() {
               </label>
               <input
                 type="text"
+                autoComplete="off"
+                spellCheck={false}
                 value={formData.bankAccountNumber}
                 onChange={(e) => handleChange("bankAccountNumber", e.target.value)}
                 placeholder="e.g. 50100492837192"
@@ -624,11 +766,11 @@ export default function AddEmployeePage() {
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1">
-                IFSC Code
-              </label>
+              <label className="block text-xs font-semibold text-gray-700 mb-1">IFSC Code</label>
               <input
                 type="text"
+                autoComplete="off"
+                spellCheck={false}
                 value={formData.bankIfscCode}
                 onChange={(e) => handleChange("bankIfscCode", e.target.value.toUpperCase())}
                 placeholder="e.g. HDFC0001234"
@@ -655,8 +797,12 @@ export default function AddEmployeePage() {
                 <label className="block text-[11px] font-semibold text-gray-700 mb-1">Name</label>
                 <input
                   type="text"
+                  autoComplete="off"
+                  spellCheck={false}
                   value={formData.emergencyContact1.name}
-                  onChange={(e) => handleEmergencyChange("emergencyContact1", "name", e.target.value)}
+                  onChange={(e) =>
+                    handleEmergencyChange("emergencyContact1", "name", e.target.value)
+                  }
                   placeholder="e.g. Suresh Kumar"
                   className="w-full px-3 py-1.5 text-xs border border-gray-300 rounded-lg bg-white outline-none"
                 />
@@ -664,32 +810,43 @@ export default function AddEmployeePage() {
 
               <div>
                 <label className="block text-[11px] font-semibold text-gray-700 mb-1">Relation</label>
-                <input
-                  type="text"
+                <CustomDropdown
+                  options={relationOptions}
                   value={formData.emergencyContact1.relation}
-                  onChange={(e) => handleEmergencyChange("emergencyContact1", "relation", e.target.value)}
-                  placeholder="e.g. Father / Spouse"
-                  className="w-full px-3 py-1.5 text-xs border border-gray-300 rounded-lg bg-white outline-none"
+                  onChange={(val) => handleEmergencyChange("emergencyContact1", "relation", val)}
+                  placeholder="Select Relation"
                 />
               </div>
 
               <div>
-                <label className="block text-[11px] font-semibold text-gray-700 mb-1">Mobile Number</label>
+                <label className="block text-[11px] font-semibold text-gray-700 mb-1">
+                  Mobile Number
+                </label>
                 <input
                   type="tel"
+                  autoComplete="off"
+                  spellCheck={false}
                   value={formData.emergencyContact1.mobileNumber}
-                  onChange={(e) => handleEmergencyChange("emergencyContact1", "mobileNumber", e.target.value)}
+                  onChange={(e) =>
+                    handleEmergencyChange("emergencyContact1", "mobileNumber", e.target.value)
+                  }
                   placeholder="+91 9876500001"
                   className="w-full px-3 py-1.5 text-xs border border-gray-300 rounded-lg bg-white outline-none"
                 />
               </div>
 
               <div>
-                <label className="block text-[11px] font-semibold text-gray-700 mb-1">Occupation</label>
+                <label className="block text-[11px] font-semibold text-gray-700 mb-1">
+                  Occupation
+                </label>
                 <input
                   type="text"
+                  autoComplete="off"
+                  spellCheck={false}
                   value={formData.emergencyContact1.occupation}
-                  onChange={(e) => handleEmergencyChange("emergencyContact1", "occupation", e.target.value)}
+                  onChange={(e) =>
+                    handleEmergencyChange("emergencyContact1", "occupation", e.target.value)
+                  }
                   placeholder="e.g. Business"
                   className="w-full px-3 py-1.5 text-xs border border-gray-300 rounded-lg bg-white outline-none"
                 />
@@ -699,8 +856,12 @@ export default function AddEmployeePage() {
                 <label className="block text-[11px] font-semibold text-gray-700 mb-1">Address</label>
                 <input
                   type="text"
+                  autoComplete="off"
+                  spellCheck={false}
                   value={formData.emergencyContact1.address}
-                  onChange={(e) => handleEmergencyChange("emergencyContact1", "address", e.target.value)}
+                  onChange={(e) =>
+                    handleEmergencyChange("emergencyContact1", "address", e.target.value)
+                  }
                   placeholder="Emergency contact full address"
                   className="w-full px-3 py-1.5 text-xs border border-gray-300 rounded-lg bg-white outline-none"
                 />
@@ -718,8 +879,12 @@ export default function AddEmployeePage() {
                 <label className="block text-[11px] font-semibold text-gray-700 mb-1">Name</label>
                 <input
                   type="text"
+                  autoComplete="off"
+                  spellCheck={false}
                   value={formData.emergencyContact2.name}
-                  onChange={(e) => handleEmergencyChange("emergencyContact2", "name", e.target.value)}
+                  onChange={(e) =>
+                    handleEmergencyChange("emergencyContact2", "name", e.target.value)
+                  }
                   placeholder="e.g. Priya Kumar"
                   className="w-full px-3 py-1.5 text-xs border border-gray-300 rounded-lg bg-white outline-none"
                 />
@@ -727,32 +892,43 @@ export default function AddEmployeePage() {
 
               <div>
                 <label className="block text-[11px] font-semibold text-gray-700 mb-1">Relation</label>
-                <input
-                  type="text"
+                <CustomDropdown
+                  options={relationOptions}
                   value={formData.emergencyContact2.relation}
-                  onChange={(e) => handleEmergencyChange("emergencyContact2", "relation", e.target.value)}
-                  placeholder="e.g. Spouse / Mother"
-                  className="w-full px-3 py-1.5 text-xs border border-gray-300 rounded-lg bg-white outline-none"
+                  onChange={(val) => handleEmergencyChange("emergencyContact2", "relation", val)}
+                  placeholder="Select Relation"
                 />
               </div>
 
               <div>
-                <label className="block text-[11px] font-semibold text-gray-700 mb-1">Mobile Number</label>
+                <label className="block text-[11px] font-semibold text-gray-700 mb-1">
+                  Mobile Number
+                </label>
                 <input
                   type="tel"
+                  autoComplete="off"
+                  spellCheck={false}
                   value={formData.emergencyContact2.mobileNumber}
-                  onChange={(e) => handleEmergencyChange("emergencyContact2", "mobileNumber", e.target.value)}
+                  onChange={(e) =>
+                    handleEmergencyChange("emergencyContact2", "mobileNumber", e.target.value)
+                  }
                   placeholder="+91 9876500002"
                   className="w-full px-3 py-1.5 text-xs border border-gray-300 rounded-lg bg-white outline-none"
                 />
               </div>
 
               <div>
-                <label className="block text-[11px] font-semibold text-gray-700 mb-1">Occupation</label>
+                <label className="block text-[11px] font-semibold text-gray-700 mb-1">
+                  Occupation
+                </label>
                 <input
                   type="text"
+                  autoComplete="off"
+                  spellCheck={false}
                   value={formData.emergencyContact2.occupation}
-                  onChange={(e) => handleEmergencyChange("emergencyContact2", "occupation", e.target.value)}
+                  onChange={(e) =>
+                    handleEmergencyChange("emergencyContact2", "occupation", e.target.value)
+                  }
                   placeholder="e.g. Teacher"
                   className="w-full px-3 py-1.5 text-xs border border-gray-300 rounded-lg bg-white outline-none"
                 />
@@ -762,8 +938,12 @@ export default function AddEmployeePage() {
                 <label className="block text-[11px] font-semibold text-gray-700 mb-1">Address</label>
                 <input
                   type="text"
+                  autoComplete="off"
+                  spellCheck={false}
                   value={formData.emergencyContact2.address}
-                  onChange={(e) => handleEmergencyChange("emergencyContact2", "address", e.target.value)}
+                  onChange={(e) =>
+                    handleEmergencyChange("emergencyContact2", "address", e.target.value)
+                  }
                   placeholder="Emergency contact 2 full address"
                   className="w-full px-3 py-1.5 text-xs border border-gray-300 rounded-lg bg-white outline-none"
                 />
@@ -772,7 +952,7 @@ export default function AddEmployeePage() {
           </div>
         </div>
 
-        {/* Submit Bar at bottom - Compact Shopify Button Alignment */}
+        {/* Submit Bar */}
         <div className="flex justify-end space-x-2 pt-2">
           <Link
             href="/employees"

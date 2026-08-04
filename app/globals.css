@@ -24,3 +24,27 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Global Pointer Cursors for interactive elements */
+button,
+a,
+select,
+summary,
+[role="button"],
+label,
+input[type="submit"],
+input[type="button"],
+input[type="reset"],
+input[type="file"],
+input[type="checkbox"],
+input[type="radio"],
+.cursor-pointer {
+  cursor: pointer;
+}
+
+button:disabled,
+input:disabled,
+select:disabled,
+.cursor-not-allowed {
+  cursor: not-allowed !important;
+}

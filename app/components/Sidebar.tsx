@@ -9,6 +9,7 @@ import {
   Briefcase,
   Target,
   FileText,
+  Building2,
   Settings,
   ChevronRight,
   Sparkles,
@@ -37,6 +38,11 @@ export default function Sidebar() {
       name: "Employees",
       href: "/employees",
       icon: Briefcase,
+    },
+    {
+      name: "Departments & Roles",
+      href: "/departments-roles",
+      icon: Building2,
     },
     {
       name: "Leads",
@@ -114,7 +120,7 @@ export default function Sidebar() {
               <Sparkles className="w-3 h-3 text-[#0B4FBA]" />
               <span>GamaNext v1.0</span>
             </div>
-            <div className="text-gray-500 text-[11px]">7 Core Modules</div>
+            <div className="text-gray-500 text-[11px]">8 Core Modules</div>
           </div>
           <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-100 text-emerald-800">
             Active
