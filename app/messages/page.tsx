@@ -626,29 +626,29 @@ export default function MessagesPage() {
 
     if (!activePhone) return;
 
+    const normPhone = normalizePhone(activePhone);
+
     try {
       const q = query(
         collection(db, "whatsapp_messages"),
-        where("phone", "==", activePhone),
-        orderBy("timestamp", "asc")
+        where("phone", "==", normPhone)
       );
       const unsub = onSnapshot(q, (snap) => {
         const msgs: WhatsAppMessage[] = snap.docs.map(
           (d) => ({ id: d.id, ...d.data() } as WhatsAppMessage)
         );
+        msgs.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
         setMessages(msgs);
       }, (err) => {
         console.warn("Message listener fallback:", err);
-        // Fallback: poll every 5s if onSnapshot isn't available (e.g. missing index)
         const load = async () => {
           const { getWhatsAppMessages } = await import("@/lib/firebase");
-          const msgs = await getWhatsAppMessages(activePhone);
+          const msgs = await getWhatsAppMessages(normPhone);
           setMessages(msgs);
         };
         load();
         const id = setInterval(load, 5000);
         msgUnsubRef.current = () => clearInterval(id);
-        return;
       });
       msgUnsubRef.current = unsub;
     } catch (e) {
@@ -679,8 +679,9 @@ export default function MessagesPage() {
 
   /* ── Open conversation ── */
   function openConversation(phone: string, contact?: WhatsAppContact) {
-    setActivePhone(phone);
-    setActiveContact(contact || contacts.find((c) => c.phone === phone) || null);
+    const norm = normalizePhone(phone);
+    setActivePhone(norm);
+    setActiveContact(contact || contacts.find((c) => normalizePhone(c.phone) === norm) || null);
     setApiError("");
     setShowContactMenu(false);
   }
@@ -690,14 +691,13 @@ export default function MessagesPage() {
     const text = inputText.trim();
     if (!text || !activePhone || sending) return;
 
+    const normPhone = normalizePhone(activePhone);
     setSending(true);
     setApiError("");
     setInputText("");
 
-    // Optimistic local message
-    const tempMsg: WhatsAppMessage = {
-      id: `temp-${Date.now()}`,
-      phone: activePhone,
+    const newMsg: WhatsAppMessage = {
+      phone: normPhone,
       contactName: activeContact?.name,
       direction: "outbound",
       type: "text",
@@ -706,39 +706,29 @@ export default function MessagesPage() {
       timestamp: new Date().toISOString(),
     };
 
-    setMessages((prev) => [...prev, tempMsg]);
-
     try {
-      // 1. Save to Firestore first (optimistically)
-      const savedMsg = await saveWhatsAppMessage({ ...tempMsg, id: undefined });
+      // 1. Save to Firestore (onSnapshot automatically renders it)
+      const savedMsg = await saveWhatsAppMessage(newMsg);
 
       // 2. Call WhatsApp API
       const res = await fetch("/api/whatsapp/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ to: activePhone, message: text }),
+        body: JSON.stringify({ to: normPhone, message: text }),
       });
       const data = await res.json();
 
       if (data.success) {
-        await updateWhatsAppMessageStatus(savedMsg.id!, "sent", data.waMessageId);
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === tempMsg.id ? { ...savedMsg, status: "sent", waMessageId: data.waMessageId } : m
-          )
-        );
-        // Realtime onSnapshot automatically updates conversation list
+        if (savedMsg.id) {
+          await updateWhatsAppMessageStatus(savedMsg.id, "sent", data.waMessageId);
+        }
       } else {
-        await updateWhatsAppMessageStatus(savedMsg.id!, "failed");
-        setMessages((prev) =>
-          prev.map((m) => (m.id === tempMsg.id ? { ...savedMsg, status: "failed" } : m))
-        );
+        if (savedMsg.id) {
+          await updateWhatsAppMessageStatus(savedMsg.id, "failed");
+        }
         setApiError(data.error || "Failed to send message via WhatsApp API");
       }
     } catch (err) {
-      setMessages((prev) =>
-        prev.map((m) => (m.id === tempMsg.id ? { ...m, status: "failed" } : m))
-      );
       setApiError("Network error — could not reach the WhatsApp API");
     } finally {
       setSending(false);
