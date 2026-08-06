@@ -89,6 +89,43 @@ function isValidPhone(p: string) {
   return /^\+[1-9]\d{6,14}$/.test(p);
 }
 
+function getServiceWindowStatus(messages: WhatsAppMessage[]) {
+  const inboundMsgs = messages.filter((m) => m.direction === "inbound");
+  if (inboundMsgs.length === 0) {
+    return {
+      active: false,
+      text: "Window Inactive (No customer inbound message)",
+      badgeBg: "bg-amber-50 text-amber-700 border-amber-200",
+      dotBg: "bg-amber-500",
+    };
+  }
+
+  const lastInbound = inboundMsgs[inboundMsgs.length - 1];
+  const lastTime = new Date(lastInbound.timestamp).getTime();
+  const now = new Date().getTime();
+  const diffMs = now - lastTime;
+  const twentyFourHoursMs = 24 * 60 * 60 * 1000;
+
+  if (diffMs < twentyFourHoursMs) {
+    const remainingMs = twentyFourHoursMs - diffMs;
+    const hours = Math.floor(remainingMs / (1000 * 60 * 60));
+    const mins = Math.floor((remainingMs % (1000 * 60 * 60)) / (1000 * 60));
+    return {
+      active: true,
+      text: `24h Window Active (${hours}h ${mins}m left)`,
+      badgeBg: "bg-emerald-50 text-emerald-700 border-emerald-200",
+      dotBg: "bg-emerald-500 animate-pulse",
+    };
+  }
+
+  return {
+    active: false,
+    text: "24h Window Expired (Template Required)",
+    badgeBg: "bg-rose-50 text-rose-700 border-rose-200",
+    dotBg: "bg-rose-500",
+  };
+}
+
 /* ─────────────── Country data ─────────────── */
 const COUNTRIES = [
   { code: "IN", name: "India",              dial: "+91",  flag: "🇮🇳" },
@@ -962,8 +999,22 @@ export default function MessagesPage() {
                     {activeContact ? getInitials(activeContact.name) : <Phone className="w-4 h-4" />}
                   </div>
                   <div>
-                    <div className="font-bold text-gray-900">
-                      {activeContact?.name || activePhone}
+                    <div className="flex items-center space-x-2">
+                      <span className="font-bold text-gray-900">
+                        {activeContact?.name || activePhone}
+                      </span>
+                      {(() => {
+                        const win = getServiceWindowStatus(messages);
+                        return (
+                          <span
+                            className={`inline-flex items-center space-x-1.5 text-[10px] font-semibold px-2 py-0.5 rounded-full border ${win.badgeBg}`}
+                            title="Meta WhatsApp 24-Hour Customer Service Window Rule"
+                          >
+                            <span className={`w-1.5 h-1.5 rounded-full ${win.dotBg}`} />
+                            <span>{win.text}</span>
+                          </span>
+                        );
+                      })()}
                     </div>
                     {activeContact && (
                       <div className="text-xs text-gray-500 font-mono">{activePhone}</div>
@@ -1110,6 +1161,24 @@ export default function MessagesPage() {
                   </button>
                 </div>
               )}
+
+              {/* 24-Hour Service Window Warning Banner */}
+              {(() => {
+                const win = getServiceWindowStatus(messages);
+                if (!win.active) {
+                  return (
+                    <div className="mx-4 mb-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg flex items-center justify-between text-xs text-amber-800">
+                      <div className="flex items-center space-x-2">
+                        <Clock className="w-4 h-4 text-amber-600 shrink-0" />
+                        <span>
+                          <strong>24h Service Window Inactive:</strong> Free-form text may be rejected by Meta. Send an approved Template or ask the customer to reply.
+                        </span>
+                      </div>
+                    </div>
+                  );
+                }
+                return null;
+              })()}
 
               {/* Message Input */}
               <div className="bg-white border-t border-gray-200/80 px-4 py-3 shrink-0">
