@@ -902,3 +902,200 @@ export async function savePerformanceBandForEmployee(bandRecord: PerformanceBand
     return created;
   }
 }
+
+/* ================================================================
+   WHATSAPP BUSINESS — CONTACTS & MESSAGES
+   ================================================================ */
+
+export interface WhatsAppContact {
+  id?: string;
+  name: string;
+  phone: string; // E.164 format e.g. +919876543210
+  avatar?: string;
+  tags?: string[];
+  notes?: string;
+  lastMessageAt?: string;
+  createdAt?: string;
+}
+
+export interface WhatsAppMessage {
+  id?: string;
+  phone: string; // E.164
+  contactName?: string;
+  direction: "outbound" | "inbound";
+  type: "text" | "template";
+  message: string;
+  status: "sending" | "sent" | "delivered" | "read" | "failed";
+  waMessageId?: string; // ID returned by Meta API
+  timestamp: string; // ISO string
+  createdAt?: string;
+}
+
+const LOCAL_STORAGE_KEY_WA_CONTACTS = "gamanext_wa_contacts";
+const LOCAL_STORAGE_KEY_WA_MESSAGES = "gamanext_wa_messages";
+
+/* --- CONTACTS --- */
+
+export async function getWhatsAppContacts(): Promise<WhatsAppContact[]> {
+  try {
+    const q = query(collection(db, "whatsapp_contacts"), orderBy("createdAt", "desc"));
+    const snapshot = await getDocs(q);
+    const contacts: WhatsAppContact[] = [];
+    snapshot.forEach((docSnap) => {
+      contacts.push({ id: docSnap.id, ...docSnap.data() } as WhatsAppContact);
+    });
+    if (contacts.length > 0) return contacts;
+  } catch (err) {
+    console.warn("Firestore WA contacts fetch notice:", err);
+  }
+  if (typeof window !== "undefined") {
+    const data = localStorage.getItem(LOCAL_STORAGE_KEY_WA_CONTACTS);
+    if (data) {
+      try { return JSON.parse(data); } catch (e) {}
+    }
+  }
+  return [];
+}
+
+export async function getWhatsAppContactByPhone(phone: string): Promise<WhatsAppContact | null> {
+  const contacts = await getWhatsAppContacts();
+  return contacts.find((c) => c.phone === phone) || null;
+}
+
+export async function saveWhatsAppContact(contact: WhatsAppContact): Promise<WhatsAppContact> {
+  const item: WhatsAppContact = { ...contact, createdAt: new Date().toISOString() };
+  try {
+    const docRef = await addDoc(collection(db, "whatsapp_contacts"), item);
+    const created = { ...item, id: docRef.id };
+    if (typeof window !== "undefined") {
+      const existing = await getWhatsAppContacts();
+      localStorage.setItem(LOCAL_STORAGE_KEY_WA_CONTACTS, JSON.stringify([created, ...existing]));
+    }
+    return created;
+  } catch (err) {
+    const created = { ...item, id: `wac-${Date.now()}` };
+    if (typeof window !== "undefined") {
+      const existing = await getWhatsAppContacts();
+      localStorage.setItem(LOCAL_STORAGE_KEY_WA_CONTACTS, JSON.stringify([created, ...existing]));
+    }
+    return created;
+  }
+}
+
+export async function updateWhatsAppContact(id: string, data: Partial<WhatsAppContact>): Promise<boolean> {
+  try {
+    if (id) await updateDoc(doc(db, "whatsapp_contacts", id), data);
+  } catch (e) {}
+  if (typeof window !== "undefined") {
+    const existing = await getWhatsAppContacts();
+    const updated = existing.map((c) => (c.id === id ? { ...c, ...data } : c));
+    localStorage.setItem(LOCAL_STORAGE_KEY_WA_CONTACTS, JSON.stringify(updated));
+  }
+  return true;
+}
+
+export async function deleteWhatsAppContact(id: string): Promise<boolean> {
+  try {
+    if (id) await deleteDoc(doc(db, "whatsapp_contacts", id));
+  } catch (e) {}
+  if (typeof window !== "undefined") {
+    const existing = await getWhatsAppContacts();
+    localStorage.setItem(
+      LOCAL_STORAGE_KEY_WA_CONTACTS,
+      JSON.stringify(existing.filter((c) => c.id !== id))
+    );
+  }
+  return true;
+}
+
+/* --- MESSAGES --- */
+
+export async function getWhatsAppMessages(phone: string): Promise<WhatsAppMessage[]> {
+  try {
+    const q = query(
+      collection(db, "whatsapp_messages"),
+      where("phone", "==", phone),
+      orderBy("timestamp", "asc")
+    );
+    const snapshot = await getDocs(q);
+    const msgs: WhatsAppMessage[] = [];
+    snapshot.forEach((docSnap) => {
+      msgs.push({ id: docSnap.id, ...docSnap.data() } as WhatsAppMessage);
+    });
+    if (msgs.length > 0) return msgs;
+  } catch (e) {}
+  if (typeof window !== "undefined") {
+    const data = localStorage.getItem(LOCAL_STORAGE_KEY_WA_MESSAGES);
+    if (data) {
+      try {
+        const all: WhatsAppMessage[] = JSON.parse(data);
+        return all.filter((m) => m.phone === phone).sort(
+          (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+        );
+      } catch (e) {}
+    }
+  }
+  return [];
+}
+
+export async function getAllWhatsAppConversations(): Promise<WhatsAppMessage[]> {
+  try {
+    const q = query(collection(db, "whatsapp_messages"), orderBy("timestamp", "desc"));
+    const snapshot = await getDocs(q);
+    const msgs: WhatsAppMessage[] = [];
+    snapshot.forEach((docSnap) => {
+      msgs.push({ id: docSnap.id, ...docSnap.data() } as WhatsAppMessage);
+    });
+    if (msgs.length > 0) return msgs;
+  } catch (e) {}
+  if (typeof window !== "undefined") {
+    const data = localStorage.getItem(LOCAL_STORAGE_KEY_WA_MESSAGES);
+    if (data) {
+      try { return JSON.parse(data); } catch (e) {}
+    }
+  }
+  return [];
+}
+
+export async function saveWhatsAppMessage(msg: WhatsAppMessage): Promise<WhatsAppMessage> {
+  const item: WhatsAppMessage = { ...msg, createdAt: new Date().toISOString() };
+  try {
+    const docRef = await addDoc(collection(db, "whatsapp_messages"), item);
+    const created = { ...item, id: docRef.id };
+    if (typeof window !== "undefined") {
+      const existingStr = localStorage.getItem(LOCAL_STORAGE_KEY_WA_MESSAGES);
+      const existing: WhatsAppMessage[] = existingStr ? JSON.parse(existingStr) : [];
+      localStorage.setItem(LOCAL_STORAGE_KEY_WA_MESSAGES, JSON.stringify([created, ...existing]));
+    }
+    return created;
+  } catch (e) {
+    const created = { ...item, id: `wam-${Date.now()}` };
+    if (typeof window !== "undefined") {
+      const existingStr = localStorage.getItem(LOCAL_STORAGE_KEY_WA_MESSAGES);
+      const existing: WhatsAppMessage[] = existingStr ? JSON.parse(existingStr) : [];
+      localStorage.setItem(LOCAL_STORAGE_KEY_WA_MESSAGES, JSON.stringify([created, ...existing]));
+    }
+    return created;
+  }
+}
+
+export async function updateWhatsAppMessageStatus(
+  id: string,
+  status: WhatsAppMessage["status"],
+  waMessageId?: string
+): Promise<boolean> {
+  const updateData: Partial<WhatsAppMessage> = { status };
+  if (waMessageId) updateData.waMessageId = waMessageId;
+  try {
+    if (id && !id.startsWith("wam-")) await updateDoc(doc(db, "whatsapp_messages", id), updateData);
+  } catch (e) {}
+  if (typeof window !== "undefined") {
+    const existingStr = localStorage.getItem(LOCAL_STORAGE_KEY_WA_MESSAGES);
+    if (existingStr) {
+      const existing: WhatsAppMessage[] = JSON.parse(existingStr);
+      const updated = existing.map((m) => (m.id === id ? { ...m, ...updateData } : m));
+      localStorage.setItem(LOCAL_STORAGE_KEY_WA_MESSAGES, JSON.stringify(updated));
+    }
+  }
+  return true;
+}
