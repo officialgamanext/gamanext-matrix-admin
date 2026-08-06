@@ -57,97 +57,92 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
 
-    const entry = body?.entry?.[0];
-    const changes = entry?.changes?.[0];
-    const value = changes?.value;
+    const entries = body?.entry || [];
+    for (const entry of entries) {
+      const changes = entry?.changes || [];
+      for (const change of changes) {
+        const value = change?.value;
+        if (!value) continue;
 
-    /* ── Handle inbound TEXT messages ── */
-    const inboundMessages = value?.messages;
-    if (inboundMessages && inboundMessages.length > 0) {
-      for (const msg of inboundMessages) {
-        const from: string = msg.from; // e.g. "918143538314" or "+918143538314"
-        const phone = normalizePhone(from);
-        const msgBody: string =
-          msg?.text?.body ||
-          msg?.image?.caption ||
-          msg?.document?.filename ||
-          (msg?.type ? `[${msg.type} message]` : "[message]");
-        const timestamp = new Date(Number(msg.timestamp) * 1000).toISOString();
-        const waId: string = msg.id;
+        /* ── Handle inbound messages ── */
+        const inboundMessages = value?.messages;
+        if (inboundMessages && inboundMessages.length > 0) {
+          for (const msg of inboundMessages) {
+            const from: string = msg.from; // e.g. "918143538314" or "+918143538314"
+            const phone = normalizePhone(from);
+            const msgBody: string =
+              msg?.text?.body ||
+              msg?.image?.caption ||
+              msg?.document?.filename ||
+              (msg?.type ? `[${msg.type} message]` : "[message]");
+            const timestamp = new Date(Number(msg.timestamp) * 1000).toISOString();
+            const waId: string = msg.id;
 
-        console.log(`[WhatsApp Inbound] From: ${phone} | Body: ${msgBody} | WA ID: ${waId}`);
+            console.log(`[WhatsApp Inbound] From: ${phone} | Body: ${msgBody} | WA ID: ${waId}`);
 
-        /* ── Look up contact name ── */
-        let contactName: string | undefined;
-        try {
-          const contactsRef = collection(db, "whatsapp_contacts");
-          const q = query(contactsRef, where("phone", "==", phone));
-          const snap = await getDocs(q);
-          if (!snap.empty) {
-            contactName = (snap.docs[0].data() as { name: string }).name;
+            /* ── Look up contact name ── */
+            let contactName: string | undefined;
+            try {
+              const contactsRef = collection(db, "whatsapp_contacts");
+              const q = query(contactsRef, where("phone", "==", phone));
+              const snap = await getDocs(q);
+              if (!snap.empty) {
+                contactName = (snap.docs[0].data() as { name: string }).name;
+              }
+              if (!contactName) {
+                const metaContacts = value?.contacts as Array<{ profile: { name: string } }> | undefined;
+                contactName = metaContacts?.[0]?.profile?.name;
+              }
+            } catch (e) {}
+
+            /* ── Save inbound message to Firestore ── */
+            try {
+              await addDoc(collection(db, "whatsapp_messages"), {
+                phone,
+                contactName: contactName || null,
+                direction: "inbound",
+                type: "text",
+                message: msgBody,
+                status: "delivered",
+                waMessageId: waId,
+                timestamp,
+                createdAt: new Date().toISOString(),
+              });
+              console.log(`[WhatsApp Webhook] ✅ Saved inbound message from ${phone}`);
+            } catch (err) {
+              console.error("[WhatsApp Webhook] ❌ Failed to save inbound message:", err);
+            }
           }
-          // Also check Meta's display name from the payload
-          if (!contactName) {
-            const metaContacts = value?.contacts as Array<{ profile: { name: string } }> | undefined;
-            contactName = metaContacts?.[0]?.profile?.name;
-          }
-        } catch (e) {
-          // Contact lookup failed, proceed without name
         }
 
-        /* ── Save inbound message to Firestore ── */
-        try {
-          await addDoc(collection(db, "whatsapp_messages"), {
-            phone,
-            contactName: contactName || null,
-            direction: "inbound",
-            type: "text",
-            message: msgBody,
-            status: "delivered",
-            waMessageId: waId,
-            timestamp,
-            createdAt: new Date().toISOString(),
-          });
-          console.log(`[WhatsApp Webhook] ✅ Saved inbound message from ${phone}`);
-        } catch (err) {
-          console.error("[WhatsApp Webhook] ❌ Failed to save inbound message:", err);
-        }
-      }
-    }
+        /* ── Handle status updates (sent / delivered / read) ── */
+        const statuses = value?.statuses;
+        if (statuses && statuses.length > 0) {
+          for (const status of statuses) {
+            if (!status?.id) continue;
+            const waId = status.id;
+            const newStatus = status.status; // "sent" | "delivered" | "read" | "failed"
 
-    /* ── Handle status updates (sent / delivered / read) ── */
-    const statuses = value?.statuses as
-      | Array<{ id: string; status: string; timestamp: string; recipient_id: string }>[]
-      | undefined;
-    if (statuses && statuses.length > 0) {
-      for (const s of statuses) {
-        const status = (s as unknown as { id: string; status: string }).id
-          ? (s as unknown as { id: string; status: string })
-          : null;
-        if (!status) continue;
-        const waId = status.id;
-        const newStatus = status.status; // "sent" | "delivered" | "read" | "failed"
+            console.log(`[WhatsApp Status] WA ID: ${waId} → ${newStatus}`);
 
-        console.log(`[WhatsApp Status] WA ID: ${waId} → ${newStatus}`);
-
-        /* Update message status in Firestore by waMessageId */
-        try {
-          const msgsRef = collection(db, "whatsapp_messages");
-          const q = query(msgsRef, where("waMessageId", "==", waId));
-          const snap = await getDocs(q);
-          for (const docSnap of snap.docs) {
-            const { updateDoc, doc } = await import("firebase/firestore");
-            await updateDoc(doc(db, "whatsapp_messages", docSnap.id), {
-              status: newStatus,
-            });
+            try {
+              const msgsRef = collection(db, "whatsapp_messages");
+              const q = query(msgsRef, where("waMessageId", "==", waId));
+              const snap = await getDocs(q);
+              for (const docSnap of snap.docs) {
+                const { updateDoc, doc: docRef } = await import("firebase/firestore");
+                await updateDoc(docRef(db, "whatsapp_messages", docSnap.id), {
+                  status: newStatus,
+                });
+              }
+            } catch (err) {
+              console.error("[WhatsApp Webhook] ❌ Failed to update status:", err);
+            }
           }
-        } catch (err) {
-          console.error("[WhatsApp Webhook] ❌ Failed to update status:", err);
         }
       }
     }
 
-    // Always return 200 OK to Meta within 5 seconds
     return NextResponse.json({ status: "ok" }, { status: 200 });
   } catch (err) {
     console.error("[WhatsApp Webhook] Unhandled error:", err);
