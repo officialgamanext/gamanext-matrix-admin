@@ -1,10 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState } from "react";
 import AdminLayout from "../components/AdminLayout";
 import {
   getWhatsAppContacts,
-  getWhatsAppMessages,
   getAllWhatsAppConversations,
   saveWhatsAppContact,
   saveWhatsAppMessage,
@@ -13,7 +12,16 @@ import {
   updateWhatsAppMessageStatus,
   WhatsAppContact,
   WhatsAppMessage,
+  db,
 } from "@/lib/firebase";
+import {
+  collection,
+  query,
+  where,
+  orderBy,
+  onSnapshot,
+  Unsubscribe,
+} from "firebase/firestore";
 import {
   MessageCircle,
   Search,
@@ -523,49 +531,35 @@ export default function MessagesPage() {
   const [showContactMenu, setShowContactMenu] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [apiError, setApiError] = useState("");
+  const [isLive, setIsLive] = useState(false); // real-time listener connected
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const contactMenuRef = useRef<HTMLDivElement>(null);
+  const msgUnsubRef = useRef<Unsubscribe | null>(null);
+  const convUnsubRef = useRef<Unsubscribe | null>(null);
+  const contactsRef = useRef<WhatsAppContact[]>([]);
 
-  /* ── Load data ── */
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  async function loadData() {
-    setLoading(true);
-    try {
-      const [allContacts, allMessages] = await Promise.all([
-        getWhatsAppContacts(),
-        getAllWhatsAppConversations(),
-      ]);
-      setContacts(allContacts);
-      buildConversationList(allContacts, allMessages);
-    } catch (err) {
-      console.error("Failed to load WhatsApp data:", err);
-    } finally {
-      setLoading(false);
-    }
-  }
-
+  /* ── Build sidebar conversation list ── */
   function buildConversationList(
     allContacts: WhatsAppContact[],
     allMessages: WhatsAppMessage[]
   ) {
     const map = new Map<string, ConversationSummary>();
-    // Sort descending by timestamp
     const sorted = [...allMessages].sort(
       (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
     );
     for (const msg of sorted) {
       if (!map.has(msg.phone)) {
         const contact = allContacts.find((c) => c.phone === msg.phone);
+        const unread = allMessages.filter(
+          (m) => m.phone === msg.phone && m.direction === "inbound" && m.status !== "read"
+        ).length;
         map.set(msg.phone, {
           phone: msg.phone,
           contactName: contact?.name || msg.contactName || msg.phone,
-          lastMessage: msg.message,
+          lastMessage: msg.direction === "inbound" ? `↩ ${msg.message}` : msg.message,
           lastAt: msg.timestamp,
-          unread: 0,
+          unread,
           contact,
         });
       }
@@ -573,17 +567,99 @@ export default function MessagesPage() {
     setConversations(Array.from(map.values()));
   }
 
-  /* ── Load messages when phone changes ── */
+  /* ── Bootstrap: load contacts, then start real-time conversation listener ── */
   useEffect(() => {
+    let mounted = true;
+
+    async function bootstrap() {
+      setLoading(true);
+      try {
+        const allContacts = await getWhatsAppContacts();
+        if (!mounted) return;
+        contactsRef.current = allContacts;
+        setContacts(allContacts);
+      } catch (err) {
+        console.error("Failed to load contacts:", err);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+
+      // Real-time listener for ALL messages (for conversation list sidebar)
+      try {
+        const q = query(
+          collection(db, "whatsapp_messages"),
+          orderBy("timestamp", "desc")
+        );
+        const unsub = onSnapshot(q, (snap) => {
+          if (!mounted) return;
+          const allMsgs: WhatsAppMessage[] = snap.docs.map(
+            (d) => ({ id: d.id, ...d.data() } as WhatsAppMessage)
+          );
+          buildConversationList(contactsRef.current, allMsgs);
+          setIsLive(true);
+        }, (err) => {
+          console.warn("Conversation listener error, falling back:", err);
+          // fallback: load once
+          getAllWhatsAppConversations().then((msgs) => {
+            if (mounted) buildConversationList(contactsRef.current, msgs);
+          });
+        });
+        convUnsubRef.current = unsub;
+      } catch (e) {
+        console.error("Could not start conversation listener:", e);
+      }
+    }
+
+    bootstrap();
+    return () => {
+      mounted = false;
+      convUnsubRef.current?.();
+      msgUnsubRef.current?.();
+    };
+  }, []);
+
+  /* ── Real-time listener for active chat messages ── */
+  useEffect(() => {
+    // Clean up previous chat listener
+    msgUnsubRef.current?.();
+    msgUnsubRef.current = null;
+
     if (!activePhone) return;
-    loadMessages(activePhone);
+
+    try {
+      const q = query(
+        collection(db, "whatsapp_messages"),
+        where("phone", "==", activePhone),
+        orderBy("timestamp", "asc")
+      );
+      const unsub = onSnapshot(q, (snap) => {
+        const msgs: WhatsAppMessage[] = snap.docs.map(
+          (d) => ({ id: d.id, ...d.data() } as WhatsAppMessage)
+        );
+        setMessages(msgs);
+      }, (err) => {
+        console.warn("Message listener fallback:", err);
+        // Fallback: poll every 5s if onSnapshot isn't available (e.g. missing index)
+        const load = async () => {
+          const { getWhatsAppMessages } = await import("@/lib/firebase");
+          const msgs = await getWhatsAppMessages(activePhone);
+          setMessages(msgs);
+        };
+        load();
+        const id = setInterval(load, 5000);
+        msgUnsubRef.current = () => clearInterval(id);
+        return;
+      });
+      msgUnsubRef.current = unsub;
+    } catch (e) {
+      console.error("Could not start message listener:", e);
+    }
+
+    return () => {
+      msgUnsubRef.current?.();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activePhone]);
-
-  async function loadMessages(phone: string) {
-    const msgs = await getWhatsAppMessages(phone);
-    setMessages(msgs);
-  }
 
   /* ── Scroll to bottom ── */
   useEffect(() => {
@@ -651,8 +727,7 @@ export default function MessagesPage() {
             m.id === tempMsg.id ? { ...savedMsg, status: "sent", waMessageId: data.waMessageId } : m
           )
         );
-        // Update conversation list
-        await loadData();
+        // Realtime onSnapshot automatically updates conversation list
       } else {
         await updateWhatsAppMessageStatus(savedMsg.id!, "failed");
         setMessages((prev) =>
@@ -696,7 +771,10 @@ export default function MessagesPage() {
     setActiveContact(null);
     setShowContactMenu(false);
     setShowDeleteConfirm(false);
-    await loadData();
+    const updated = await getWhatsAppContacts();
+    setContacts(updated);
+    const allMsgs = await getAllWhatsAppConversations();
+    buildConversationList(updated, allMsgs);
   }
 
   /* ── Filtered conversations ── */
@@ -736,6 +814,12 @@ export default function MessagesPage() {
                 <span className="bg-emerald-100 text-emerald-800 text-[11px] font-semibold px-2 py-0.5 rounded-full border border-emerald-200">
                   WhatsApp Business
                 </span>
+                {isLive && (
+                  <span className="flex items-center space-x-1 text-[10px] font-semibold text-emerald-600 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
+                    <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
+                    <span>Live</span>
+                  </span>
+                )}
               </div>
               <p className="text-xs text-gray-500 mt-0.5">
                 {conversations.length} conversation{conversations.length !== 1 ? "s" : ""} · {contacts.length} saved contacts
@@ -792,6 +876,8 @@ export default function MessagesPage() {
                       className={`w-full flex items-center space-x-3 px-3 py-3 border-b border-gray-50 transition-all text-left group ${
                         isActive
                           ? "bg-blue-50 border-l-2 border-l-[#0B4FBA]"
+                          : conv.unread > 0
+                          ? "bg-emerald-50/40 hover:bg-emerald-50 border-l-2 border-l-emerald-400"
                           : "hover:bg-gray-50/80 border-l-2 border-l-transparent"
                       }`}
                     >
@@ -801,17 +887,28 @@ export default function MessagesPage() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between">
-                          <span className={`text-sm font-semibold truncate ${isActive ? "text-[#0B4FBA]" : "text-gray-900"}`}>
+                          <span className={`text-sm font-semibold truncate ${
+                            isActive ? "text-[#0B4FBA]" : conv.unread > 0 ? "text-gray-900" : "text-gray-900"
+                          }`}>
                             {conv.contact ? conv.contact.name : conv.phone}
                           </span>
-                          <span className="text-[10px] text-gray-400 shrink-0 ml-1">
-                            {formatTime(conv.lastAt)}
-                          </span>
+                          <div className="flex items-center space-x-1.5 shrink-0 ml-1">
+                            {conv.unread > 0 && !isActive && (
+                              <span className="w-5 h-5 bg-emerald-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+                                {conv.unread > 9 ? "9+" : conv.unread}
+                              </span>
+                            )}
+                            <span className="text-[10px] text-gray-400">
+                              {formatTime(conv.lastAt)}
+                            </span>
+                          </div>
                         </div>
                         {conv.contact && (
                           <div className="text-[10px] text-gray-400 font-mono">{conv.phone}</div>
                         )}
-                        <div className="text-xs text-gray-500 truncate mt-0.5">{conv.lastMessage}</div>
+                        <div className={`text-xs truncate mt-0.5 ${
+                          conv.unread > 0 && !isActive ? "text-gray-700 font-medium" : "text-gray-500"
+                        }`}>{conv.lastMessage}</div>
                       </div>
                     </button>
                   );
