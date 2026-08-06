@@ -43,6 +43,12 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({ error: "Verification failed" }, { status: 403 });
 }
 
+function normalizePhone(raw: string): string {
+  let s = raw.trim().replace(/[\s\-().]/g, "");
+  if (!s.startsWith("+")) s = "+" + s;
+  return s;
+}
+
 /**
  * POST — Incoming WhatsApp messages & status updates from Meta
  * Fires whenever a contact replies or a message status changes (sent/delivered/read).
@@ -59,8 +65,8 @@ export async function POST(req: NextRequest) {
     const inboundMessages = value?.messages;
     if (inboundMessages && inboundMessages.length > 0) {
       for (const msg of inboundMessages) {
-        const from: string = msg.from; // e.g. "918143538314" (no +)
-        const phone = `+${from}`;
+        const from: string = msg.from; // e.g. "918143538314" or "+918143538314"
+        const phone = normalizePhone(from);
         const msgBody: string =
           msg?.text?.body ||
           msg?.image?.caption ||

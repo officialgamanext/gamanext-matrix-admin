@@ -586,10 +586,7 @@ export default function MessagesPage() {
 
       // Real-time listener for ALL messages (for conversation list sidebar)
       try {
-        const q = query(
-          collection(db, "whatsapp_messages"),
-          orderBy("timestamp", "desc")
-        );
+        const q = query(collection(db, "whatsapp_messages"));
         const unsub = onSnapshot(q, (snap) => {
           if (!mounted) return;
           const allMsgs: WhatsAppMessage[] = snap.docs.map(
