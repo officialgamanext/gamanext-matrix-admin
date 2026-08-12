@@ -1163,6 +1163,7 @@ export interface CompanySettings {
   upiId?: string;
   upiQrCodeUrl?: string;
   signatoryName?: string;
+  signatoryImageUrl?: string;
   termsAndConditions?: string;
   updatedAt?: string;
 }
@@ -1190,6 +1191,7 @@ export interface CustomerInvoice {
     upiId?: string;
     upiQrCodeUrl?: string;
     signatoryName?: string;
+    signatoryImageUrl?: string;
   };
   customerDetails: {
     name: string;

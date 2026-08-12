@@ -344,11 +344,12 @@ export default function InvoicesPage() {
             <div className="p-8 space-y-6 bg-white text-gray-900 relative overflow-hidden" id="printable-invoice">
               <div className="flex justify-between items-start">
                 <div className="space-y-1 max-w-sm">
-                  <div className="flex items-center space-x-1 mb-2">
-                    <span className="text-3xl font-black text-[#004bb7] tracking-tight">Gamanext.</span>
-                  </div>
-                  <div className="text-[10px] uppercase font-bold text-gray-400 tracking-widest -mt-2 mb-3">
-                    SOFTWARE SOLUTIONS
+                  <div className="mb-3">
+                    <img
+                      src="/gama-next-logo-reserved.png"
+                      alt="GamaNext Software Solutions"
+                      className="h-10 w-auto object-contain"
+                    />
                   </div>
 
                   <div className="text-xs space-y-1 text-gray-700 font-medium">
@@ -401,15 +402,43 @@ export default function InvoicesPage() {
                 </div>
               </div>
 
-              {/* BILL TO Box */}
-              <div className="bg-[#eef4ff] p-4 rounded-xl border border-blue-100 text-xs space-y-1">
-                <span className="text-[10px] font-bold text-[#004bb7] uppercase tracking-wider block mb-1">
-                  BILL TO
-                </span>
-                <div className="font-bold text-gray-900 text-sm">{previewInvoice.customerDetails.businessName}</div>
-                <div className="text-gray-700">{previewInvoice.customerDetails.address}</div>
-                <div className="font-bold font-mono text-gray-900 mt-1">
-                  GSTIN: {previewInvoice.customerDetails.gstin || "N/A"}
+              {/* BILL TO Box with Illustration Graphic on Right */}
+              <div className="grid grid-cols-12 gap-4 items-center">
+                <div className="col-span-7 bg-[#eef4ff] p-4 rounded-xl border border-blue-100 text-xs space-y-1">
+                  <span className="text-[10px] font-bold text-[#004bb7] uppercase tracking-wider block mb-1">
+                    BILL TO
+                  </span>
+                  <div className="font-bold text-gray-900 text-sm">{previewInvoice.customerDetails.businessName}</div>
+                  <div className="text-gray-700">{previewInvoice.customerDetails.address}</div>
+                  <div className="font-bold font-mono text-gray-900 mt-1">
+                    GSTIN: {previewInvoice.customerDetails.gstin || "N/A"}
+                  </div>
+                </div>
+
+                {/* Vector Graphic Matching Mock Image */}
+                <div className="col-span-5 flex items-center justify-end pr-4 select-none">
+                  <div className="relative w-44 h-24 flex items-end justify-center">
+                    <div className="absolute top-0 left-6 w-24 h-20 bg-white border-2 border-[#004bb7] rounded-lg shadow-2xs p-2 flex flex-col justify-between">
+                      <div className="text-[8px] font-bold text-[#004bb7] border-b border-blue-200 pb-1 uppercase tracking-tighter">
+                        INVOICE
+                      </div>
+                      <div className="space-y-1 py-1">
+                        <div className="h-1 bg-blue-100 rounded w-full"></div>
+                        <div className="h-1 bg-blue-100 rounded w-4/5"></div>
+                        <div className="h-1 bg-blue-100 rounded w-3/5"></div>
+                      </div>
+                    </div>
+
+                    <div className="relative z-10 w-28 h-14 bg-white border-2 border-[#004bb7] rounded-t-lg p-1 flex flex-col items-center justify-center shadow-xs">
+                      <div className="text-xs font-mono font-bold text-[#004bb7] tracking-wider">&lt;/&gt;</div>
+                      <div className="w-full h-1 bg-[#004bb7] mt-1 rounded-full"></div>
+                    </div>
+                    <div className="absolute bottom-0 w-32 h-1 bg-[#004bb7] rounded-full z-10"></div>
+
+                    <div className="absolute -left-1 bottom-1 w-9 h-9 bg-[#004bb7] text-white rounded-full flex items-center justify-center font-bold text-sm shadow-md border-2 border-white z-20">
+                      ₹
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -530,8 +559,18 @@ export default function InvoicesPage() {
                       <span className="text-[11px] font-bold text-gray-700 block">
                         For {previewInvoice.myCompanyDetails.companyName}
                       </span>
-                      <div className="italic text-2xl font-serif text-[#004bb7] font-semibold tracking-wide pl-2 pt-2 border-b border-gray-400 w-48">
-                        {previewInvoice.myCompanyDetails.signatoryName || "Siva Krishna"}
+                      <div className="border-b border-gray-400 w-48 min-h-[40px] flex items-end pl-2 pb-1">
+                        {previewInvoice.myCompanyDetails.signatoryImageUrl || companySettings.signatoryImageUrl ? (
+                          <img
+                            src={previewInvoice.myCompanyDetails.signatoryImageUrl || companySettings.signatoryImageUrl}
+                            alt="Authorized Signature"
+                            className="h-10 w-auto object-contain"
+                          />
+                        ) : (
+                          <span className="italic text-2xl font-serif text-[#004bb7] font-semibold tracking-wide">
+                            {previewInvoice.myCompanyDetails.signatoryName || "Siva Krishna"}
+                          </span>
+                        )}
                       </div>
                       <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">
                         Authorized Signatory
