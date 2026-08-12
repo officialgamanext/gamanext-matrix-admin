@@ -1099,3 +1099,729 @@ export async function updateWhatsAppMessageStatus(
   }
   return true;
 }
+
+/* ==========================================================================
+   CUSTOMERS, WORKS, INSTALLMENTS & INVOICES MANAGEMENT MODULE
+   ========================================================================== */
+
+export interface CustomerData {
+  id?: string;
+  name: string;
+  mobileNumber: string;
+  businessName: string;
+  email?: string;
+  address: string;
+  gstin?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface CustomerWork {
+  id?: string;
+  customerId: string;
+  name: string;
+  amount: number;
+  status: "Pending" | "In Progress" | "Completed";
+  notes?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface WorkInstallment {
+  id?: string;
+  workId: string;
+  customerId: string;
+  amount: number;
+  paymentMode: "UPI" | "Cash" | "Bank Transfer" | "Cheque";
+  date: string;
+  note?: string;
+  createdAt?: string;
+}
+
+export interface InvoiceItem {
+  id: string;
+  description: string;
+  hsnSac?: string;
+  quantity: number;
+  unitPrice: number;
+  amount: number;
+}
+
+export interface CompanySettings {
+  id?: string;
+  companyName: string;
+  phone: string;
+  email: string;
+  website?: string;
+  address: string;
+  gstin: string;
+  bankName?: string;
+  accountName?: string;
+  accountNumber?: string;
+  ifscCode?: string;
+  branch?: string;
+  upiId?: string;
+  upiQrCodeUrl?: string;
+  signatoryName?: string;
+  termsAndConditions?: string;
+  updatedAt?: string;
+}
+
+export interface CustomerInvoice {
+  id?: string;
+  customerId: string;
+  invoiceNumber: string;
+  poNumber?: string;
+  issueDate: string;
+  dueDate: string;
+  status: "Paid" | "Unpaid" | "Partially Paid" | "Overdue";
+  myCompanyDetails: {
+    companyName: string;
+    email: string;
+    phone: string;
+    website?: string;
+    address: string;
+    gstin: string;
+    bankName?: string;
+    accountName?: string;
+    accountNumber?: string;
+    ifscCode?: string;
+    branch?: string;
+    upiId?: string;
+    upiQrCodeUrl?: string;
+    signatoryName?: string;
+  };
+  customerDetails: {
+    name: string;
+    businessName: string;
+    mobileNumber: string;
+    email?: string;
+    address: string;
+    gstin?: string;
+  };
+  items: InvoiceItem[];
+  subtotal: number;
+  cgstRate?: number;
+  cgstAmount?: number;
+  sgstRate?: number;
+  sgstAmount?: number;
+  igstRate?: number;
+  igstAmount?: number;
+  taxAmount?: number;
+  discount?: number;
+  total: number;
+  notes?: string;
+  terms?: string;
+  createdAt?: string;
+}
+
+const LOCAL_STORAGE_KEY_CUSTOMERS = "gamanext_customers_v1";
+const LOCAL_STORAGE_KEY_CUSTOMER_WORKS = "gamanext_customer_works_v1";
+const LOCAL_STORAGE_KEY_WORK_INSTALLMENTS = "gamanext_work_installments_v1";
+const LOCAL_STORAGE_KEY_CUSTOMER_INVOICES = "gamanext_customer_invoices_v1";
+const LOCAL_STORAGE_KEY_COMPANY_SETTINGS = "gamanext_company_settings_v1";
+
+export const DEFAULT_COMPANY_SETTINGS: CompanySettings = {
+  companyName: "Gamanext Software Solutions Pvt. Ltd.",
+  phone: "+91 6281288314",
+  email: "hello@gamanext.com",
+  website: "www.gamanext.com",
+  address: "123, Tech Park, 4th Floor, Bengaluru, Karnataka - 560001, India",
+  gstin: "37JVXPK4914E1ZY",
+  bankName: "HDFC Bank",
+  accountName: "Gamanext Software Solutions Pvt. Ltd.",
+  accountNumber: "50200012345678",
+  ifscCode: "HDFC0001234",
+  branch: "Koramangala, Bengaluru",
+  upiId: "6281288314@upi",
+  signatoryName: "Siva Krishna",
+  termsAndConditions:
+    "• Payment is due within 30 days from the invoice date.\n• Late payments may be subject to a 2% monthly interest charge.\n• All disputes are subject to Bengaluru jurisdiction.",
+};
+
+/* --- COMPANY SETTINGS FUNCTIONS --- */
+
+export async function getCompanySettingsFromStorage(): Promise<CompanySettings> {
+  try {
+    const snapshot = await getDocs(collection(db, "company_settings"));
+    const items: CompanySettings[] = [];
+    snapshot.forEach((docSnap) => {
+      items.push({ id: docSnap.id, ...docSnap.data() } as CompanySettings);
+    });
+    if (items.length > 0) return items[0];
+  } catch (e) {}
+
+  if (typeof window !== "undefined") {
+    const stored = localStorage.getItem(LOCAL_STORAGE_KEY_COMPANY_SETTINGS);
+    if (stored) {
+      try {
+        return JSON.parse(stored);
+      } catch (e) {}
+    } else {
+      localStorage.setItem(
+        LOCAL_STORAGE_KEY_COMPANY_SETTINGS,
+        JSON.stringify(DEFAULT_COMPANY_SETTINGS)
+      );
+      return DEFAULT_COMPANY_SETTINGS;
+    }
+  }
+  return DEFAULT_COMPANY_SETTINGS;
+}
+
+export async function saveCompanySettingsToStorage(
+  settings: CompanySettings
+): Promise<CompanySettings> {
+  const now = new Date().toISOString();
+  const itemToSave: CompanySettings = {
+    ...settings,
+    updatedAt: now,
+  };
+
+  try {
+    if (itemToSave.id && !itemToSave.id.startsWith("setting-")) {
+      const docId = itemToSave.id;
+      const { id, ...data } = itemToSave;
+      await updateDoc(doc(db, "company_settings", docId), data);
+    } else {
+      const docRef = await addDoc(collection(db, "company_settings"), itemToSave);
+      itemToSave.id = docRef.id;
+    }
+  } catch (e) {
+    if (!itemToSave.id) itemToSave.id = "setting-main";
+  }
+
+  if (typeof window !== "undefined") {
+    localStorage.setItem(
+      LOCAL_STORAGE_KEY_COMPANY_SETTINGS,
+      JSON.stringify(itemToSave)
+    );
+  }
+
+  return itemToSave;
+}
+
+// Initial seed data for immediate demonstration
+const SEED_CUSTOMERS: CustomerData[] = [
+  {
+    id: "cust-101",
+    name: "Rajesh Sharma",
+    mobileNumber: "+91 98765 43210",
+    businessName: "Sharma Digital Solutions",
+    email: "rajesh@sharmadigital.com",
+    address: "Plot 42, Hitech City, Hyderabad, Telangana 500081",
+    createdAt: "2026-07-15T10:00:00.000Z",
+  },
+  {
+    id: "cust-102",
+    name: "Ananya Roy",
+    mobileNumber: "+91 91234 56789",
+    businessName: "Vogue Interior Studio",
+    email: "info@vogueinteriors.in",
+    address: "12/A Jubilee Hills, Road No. 36, Hyderabad, Telangana 500033",
+    createdAt: "2026-08-01T14:30:00.000Z",
+  },
+];
+
+const SEED_WORKS: CustomerWork[] = [
+  {
+    id: "work-1",
+    customerId: "cust-101",
+    name: "Enterprise ERP Portal Development",
+    amount: 150000,
+    status: "In Progress",
+    notes: "Full stack NEXT.js web application with Firebase database",
+    createdAt: "2026-07-16T11:00:00.000Z",
+  },
+  {
+    id: "work-2",
+    customerId: "cust-101",
+    name: "SEO & Brand Strategy",
+    amount: 35000,
+    status: "Completed",
+    notes: "Organic search optimization & social media branding assets",
+    createdAt: "2026-07-20T09:15:00.000Z",
+  },
+  {
+    id: "work-3",
+    customerId: "cust-102",
+    name: "E-Commerce Website & Payment Setup",
+    amount: 85000,
+    status: "In Progress",
+    notes: "Shopify custom storefront with Razorpay & WhatsApp order tracking",
+    createdAt: "2026-08-02T16:00:00.000Z",
+  },
+];
+
+const SEED_INSTALLMENTS: WorkInstallment[] = [
+  {
+    id: "inst-1",
+    workId: "work-1",
+    customerId: "cust-101",
+    amount: 50000,
+    paymentMode: "UPI",
+    date: "2026-07-16",
+    note: "Advance 33% payment received via GPay",
+    createdAt: "2026-07-16T11:30:00.000Z",
+  },
+  {
+    id: "inst-2",
+    workId: "work-1",
+    customerId: "cust-101",
+    amount: 40000,
+    paymentMode: "Cash",
+    date: "2026-08-05",
+    note: "Milestone 2 payment received in cash",
+    createdAt: "2026-08-05T15:20:00.000Z",
+  },
+  {
+    id: "inst-3",
+    workId: "work-2",
+    customerId: "cust-101",
+    amount: 35000,
+    paymentMode: "Bank Transfer",
+    date: "2026-07-25",
+    note: "Full payment via NEFT",
+    createdAt: "2026-07-25T12:00:00.000Z",
+  },
+  {
+    id: "inst-4",
+    workId: "work-3",
+    customerId: "cust-102",
+    amount: 30000,
+    paymentMode: "UPI",
+    date: "2026-08-03",
+    note: "Initial deposit via PhonePe",
+    createdAt: "2026-08-03T10:00:00.000Z",
+  },
+];
+
+const SEED_INVOICES: CustomerInvoice[] = [
+  {
+    id: "inv-1",
+    customerId: "cust-101",
+    invoiceNumber: "INV-2026-0001",
+    poNumber: "PO-2026-0054",
+    issueDate: "2026-05-29",
+    dueDate: "2026-06-28",
+    status: "Partially Paid",
+    myCompanyDetails: {
+      companyName: "Gamanext Software Solutions Pvt. Ltd.",
+      email: "hello@gamanext.com",
+      phone: "+91 6281288314",
+      website: "www.gamanext.com",
+      address: "123, Tech Park, 4th Floor, Bengaluru, Karnataka - 560001, India",
+      gstin: "37JVXPK4914E1ZY",
+      bankName: "HDFC Bank",
+      accountName: "Gamanext Software Solutions Pvt. Ltd.",
+      accountNumber: "50200012345678",
+      ifscCode: "HDFC0001234",
+      branch: "Koramangala, Bengaluru",
+      upiId: "6281288314@upi",
+      signatoryName: "Siva Krishna",
+    },
+    customerDetails: {
+      name: "Rajesh Sharma",
+      businessName: "Sharma Digital Solutions Pvt. Ltd.",
+      mobileNumber: "+91 98765 43210",
+      email: "rajesh@sharmadigital.com",
+      address: "45, Industrial Area, Whitefield, Bengaluru, Karnataka - 560066, India",
+      gstin: "29ACME1234B1Z2",
+    },
+    items: [
+      {
+        id: "item-1",
+        description: "Custom Software Development\nRequirement Analysis, UI/UX, Development & Testing",
+        hsnSac: "998313",
+        quantity: 1,
+        unitPrice: 75000,
+        amount: 75000,
+      },
+      {
+        id: "item-2",
+        description: "Web Application Maintenance\nMonthly Maintenance & Support",
+        hsnSac: "998313",
+        quantity: 1,
+        unitPrice: 15000,
+        amount: 15000,
+      },
+      {
+        id: "item-3",
+        description: "API Integration Services\nThird-party API Integration & Configuration",
+        hsnSac: "998313",
+        quantity: 1,
+        unitPrice: 10000,
+        amount: 10000,
+      },
+      {
+        id: "item-4",
+        description: "Cloud Hosting & Deployment\nServer Setup & Deployment",
+        hsnSac: "998313",
+        quantity: 1,
+        unitPrice: 5000,
+        amount: 5000,
+      },
+    ],
+    subtotal: 105000,
+    cgstRate: 9,
+    cgstAmount: 9450,
+    sgstRate: 9,
+    sgstAmount: 9450,
+    taxAmount: 18900,
+    discount: 0,
+    total: 123900,
+    notes: "Thank you for your business.\nWe appreciate your trust in Gamanext.",
+    terms:
+      "• Payment is due within 30 days from the invoice date.\n• Late payments may be subject to a 2% monthly interest charge.\n• All disputes are subject to Bengaluru jurisdiction.",
+    createdAt: "2026-05-29T10:00:00.000Z",
+  },
+];
+
+/* --- CUSTOMER FUNCTIONS --- */
+
+export async function getCustomersFromStorage(): Promise<CustomerData[]> {
+  try {
+    const snapshot = await getDocs(collection(db, "customers"));
+    const items: CustomerData[] = [];
+    snapshot.forEach((docSnap) => {
+      items.push({ id: docSnap.id, ...docSnap.data() } as CustomerData);
+    });
+    if (items.length > 0) return items;
+  } catch (e) {}
+
+  if (typeof window !== "undefined") {
+    const stored = localStorage.getItem(LOCAL_STORAGE_KEY_CUSTOMERS);
+    if (stored) {
+      try {
+        return JSON.parse(stored);
+      } catch (e) {}
+    } else {
+      localStorage.setItem(LOCAL_STORAGE_KEY_CUSTOMERS, JSON.stringify(SEED_CUSTOMERS));
+      return SEED_CUSTOMERS;
+    }
+  }
+  return SEED_CUSTOMERS;
+}
+
+export async function saveCustomerToStorage(customer: CustomerData): Promise<CustomerData> {
+  const isEdit = Boolean(customer.id);
+  const now = new Date().toISOString();
+  const itemToSave: CustomerData = {
+    ...customer,
+    updatedAt: now,
+    createdAt: customer.createdAt || now,
+  };
+
+  try {
+    if (isEdit && itemToSave.id && !itemToSave.id.startsWith("cust-")) {
+      const docId = itemToSave.id;
+      const { id, ...data } = itemToSave;
+      await updateDoc(doc(db, "customers", docId), data);
+    } else {
+      const docRef = await addDoc(collection(db, "customers"), itemToSave);
+      itemToSave.id = docRef.id;
+    }
+  } catch (e) {
+    if (!itemToSave.id) {
+      itemToSave.id = `cust-${Date.now()}`;
+    }
+  }
+
+  if (typeof window !== "undefined") {
+    const existing = await getCustomersFromStorage();
+    let updatedList: CustomerData[];
+    if (isEdit) {
+      updatedList = existing.map((c) => (c.id === itemToSave.id ? itemToSave : c));
+    } else {
+      updatedList = [itemToSave, ...existing];
+    }
+    localStorage.setItem(LOCAL_STORAGE_KEY_CUSTOMERS, JSON.stringify(updatedList));
+  }
+
+  return itemToSave;
+}
+
+export async function deleteCustomerFromStorage(id: string): Promise<boolean> {
+  try {
+    if (id && !id.startsWith("cust-")) {
+      await deleteDoc(doc(db, "customers", id));
+    }
+  } catch (e) {}
+
+  if (typeof window !== "undefined") {
+    const existing = await getCustomersFromStorage();
+    const filtered = existing.filter((c) => c.id !== id);
+    localStorage.setItem(LOCAL_STORAGE_KEY_CUSTOMERS, JSON.stringify(filtered));
+  }
+  return true;
+}
+
+/* --- CUSTOMER WORKS FUNCTIONS --- */
+
+export async function getCustomerWorksFromStorage(customerId?: string): Promise<CustomerWork[]> {
+  try {
+    const snapshot = await getDocs(collection(db, "customer_works"));
+    const items: CustomerWork[] = [];
+    snapshot.forEach((docSnap) => {
+      items.push({ id: docSnap.id, ...docSnap.data() } as CustomerWork);
+    });
+    if (items.length > 0) {
+      return customerId ? items.filter((w) => w.customerId === customerId) : items;
+    }
+  } catch (e) {}
+
+  if (typeof window !== "undefined") {
+    const stored = localStorage.getItem(LOCAL_STORAGE_KEY_CUSTOMER_WORKS);
+    if (stored) {
+      try {
+        const all: CustomerWork[] = JSON.parse(stored);
+        return customerId ? all.filter((w) => w.customerId === customerId) : all;
+      } catch (e) {}
+    } else {
+      localStorage.setItem(LOCAL_STORAGE_KEY_CUSTOMER_WORKS, JSON.stringify(SEED_WORKS));
+      return customerId ? SEED_WORKS.filter((w) => w.customerId === customerId) : SEED_WORKS;
+    }
+  }
+  return customerId ? SEED_WORKS.filter((w) => w.customerId === customerId) : SEED_WORKS;
+}
+
+export async function saveCustomerWorkToStorage(work: CustomerWork): Promise<CustomerWork> {
+  const isEdit = Boolean(work.id);
+  const now = new Date().toISOString();
+  const itemToSave: CustomerWork = {
+    ...work,
+    updatedAt: now,
+    createdAt: work.createdAt || now,
+  };
+
+  try {
+    if (isEdit && itemToSave.id && !itemToSave.id.startsWith("work-")) {
+      const docId = itemToSave.id;
+      const { id, ...data } = itemToSave;
+      await updateDoc(doc(db, "customer_works", docId), data);
+    } else {
+      const docRef = await addDoc(collection(db, "customer_works"), itemToSave);
+      itemToSave.id = docRef.id;
+    }
+  } catch (e) {
+    if (!itemToSave.id) {
+      itemToSave.id = `work-${Date.now()}`;
+    }
+  }
+
+  if (typeof window !== "undefined") {
+    const existing = await getCustomerWorksFromStorage();
+    let updatedList: CustomerWork[];
+    if (isEdit) {
+      updatedList = existing.map((w) => (w.id === itemToSave.id ? itemToSave : w));
+    } else {
+      updatedList = [itemToSave, ...existing];
+    }
+    localStorage.setItem(LOCAL_STORAGE_KEY_CUSTOMER_WORKS, JSON.stringify(updatedList));
+  }
+
+  return itemToSave;
+}
+
+export async function deleteCustomerWorkFromStorage(id: string): Promise<boolean> {
+  try {
+    if (id && !id.startsWith("work-")) {
+      await deleteDoc(doc(db, "customer_works", id));
+    }
+  } catch (e) {}
+
+  if (typeof window !== "undefined") {
+    const existing = await getCustomerWorksFromStorage();
+    const filtered = existing.filter((w) => w.id !== id);
+    localStorage.setItem(LOCAL_STORAGE_KEY_CUSTOMER_WORKS, JSON.stringify(filtered));
+  }
+  return true;
+}
+
+/* --- WORK INSTALLMENTS FUNCTIONS --- */
+
+export async function getWorkInstallmentsFromStorage(
+  customerId?: string,
+  workId?: string
+): Promise<WorkInstallment[]> {
+  try {
+    const snapshot = await getDocs(collection(db, "work_installments"));
+    const items: WorkInstallment[] = [];
+    snapshot.forEach((docSnap) => {
+      items.push({ id: docSnap.id, ...docSnap.data() } as WorkInstallment);
+    });
+    if (items.length > 0) {
+      let filtered = items;
+      if (customerId) filtered = filtered.filter((i) => i.customerId === customerId);
+      if (workId) filtered = filtered.filter((i) => i.workId === workId);
+      return filtered;
+    }
+  } catch (e) {}
+
+  if (typeof window !== "undefined") {
+    const stored = localStorage.getItem(LOCAL_STORAGE_KEY_WORK_INSTALLMENTS);
+    if (stored) {
+      try {
+        let all: WorkInstallment[] = JSON.parse(stored);
+        if (customerId) all = all.filter((i) => i.customerId === customerId);
+        if (workId) all = all.filter((i) => i.workId === workId);
+        return all;
+      } catch (e) {}
+    } else {
+      localStorage.setItem(
+        LOCAL_STORAGE_KEY_WORK_INSTALLMENTS,
+        JSON.stringify(SEED_INSTALLMENTS)
+      );
+      let all = SEED_INSTALLMENTS;
+      if (customerId) all = all.filter((i) => i.customerId === customerId);
+      if (workId) all = all.filter((i) => i.workId === workId);
+      return all;
+    }
+  }
+  let all = SEED_INSTALLMENTS;
+  if (customerId) all = all.filter((i) => i.customerId === customerId);
+  if (workId) all = all.filter((i) => i.workId === workId);
+  return all;
+}
+
+export async function saveWorkInstallmentToStorage(
+  installment: WorkInstallment
+): Promise<WorkInstallment> {
+  const isEdit = Boolean(installment.id);
+  const now = new Date().toISOString();
+  const itemToSave: WorkInstallment = {
+    ...installment,
+    createdAt: installment.createdAt || now,
+  };
+
+  try {
+    if (isEdit && itemToSave.id && !itemToSave.id.startsWith("inst-")) {
+      const docId = itemToSave.id;
+      const { id, ...data } = itemToSave;
+      await updateDoc(doc(db, "work_installments", docId), data);
+    } else {
+      const docRef = await addDoc(collection(db, "work_installments"), itemToSave);
+      itemToSave.id = docRef.id;
+    }
+  } catch (e) {
+    if (!itemToSave.id) {
+      itemToSave.id = `inst-${Date.now()}`;
+    }
+  }
+
+  if (typeof window !== "undefined") {
+    const existing = await getWorkInstallmentsFromStorage();
+    let updatedList: WorkInstallment[];
+    if (isEdit) {
+      updatedList = existing.map((i) => (i.id === itemToSave.id ? itemToSave : i));
+    } else {
+      updatedList = [itemToSave, ...existing];
+    }
+    localStorage.setItem(LOCAL_STORAGE_KEY_WORK_INSTALLMENTS, JSON.stringify(updatedList));
+  }
+
+  return itemToSave;
+}
+
+export async function deleteWorkInstallmentFromStorage(id: string): Promise<boolean> {
+  try {
+    if (id && !id.startsWith("inst-")) {
+      await deleteDoc(doc(db, "work_installments", id));
+    }
+  } catch (e) {}
+
+  if (typeof window !== "undefined") {
+    const existing = await getWorkInstallmentsFromStorage();
+    const filtered = existing.filter((i) => i.id !== id);
+    localStorage.setItem(LOCAL_STORAGE_KEY_WORK_INSTALLMENTS, JSON.stringify(filtered));
+  }
+  return true;
+}
+
+/* --- CUSTOMER INVOICES FUNCTIONS --- */
+
+export async function getCustomerInvoicesFromStorage(
+  customerId?: string
+): Promise<CustomerInvoice[]> {
+  try {
+    const snapshot = await getDocs(collection(db, "customer_invoices"));
+    const items: CustomerInvoice[] = [];
+    snapshot.forEach((docSnap) => {
+      items.push({ id: docSnap.id, ...docSnap.data() } as CustomerInvoice);
+    });
+    if (items.length > 0) {
+      return customerId ? items.filter((inv) => inv.customerId === customerId) : items;
+    }
+  } catch (e) {}
+
+  if (typeof window !== "undefined") {
+    const stored = localStorage.getItem(LOCAL_STORAGE_KEY_CUSTOMER_INVOICES);
+    if (stored) {
+      try {
+        const all: CustomerInvoice[] = JSON.parse(stored);
+        return customerId ? all.filter((inv) => inv.customerId === customerId) : all;
+      } catch (e) {}
+    } else {
+      localStorage.setItem(
+        LOCAL_STORAGE_KEY_CUSTOMER_INVOICES,
+        JSON.stringify(SEED_INVOICES)
+      );
+      return customerId ? SEED_INVOICES.filter((inv) => inv.customerId === customerId) : SEED_INVOICES;
+    }
+  }
+  return customerId ? SEED_INVOICES.filter((inv) => inv.customerId === customerId) : SEED_INVOICES;
+}
+
+export async function saveCustomerInvoiceToStorage(
+  invoice: CustomerInvoice
+): Promise<CustomerInvoice> {
+  const isEdit = Boolean(invoice.id);
+  const now = new Date().toISOString();
+  const itemToSave: CustomerInvoice = {
+    ...invoice,
+    createdAt: invoice.createdAt || now,
+  };
+
+  try {
+    if (isEdit && itemToSave.id && !itemToSave.id.startsWith("inv-")) {
+      const docId = itemToSave.id;
+      const { id, ...data } = itemToSave;
+      await updateDoc(doc(db, "customer_invoices", docId), data);
+    } else {
+      const docRef = await addDoc(collection(db, "customer_invoices"), itemToSave);
+      itemToSave.id = docRef.id;
+    }
+  } catch (e) {
+    if (!itemToSave.id) {
+      itemToSave.id = `inv-${Date.now()}`;
+    }
+  }
+
+  if (typeof window !== "undefined") {
+    const existing = await getCustomerInvoicesFromStorage();
+    let updatedList: CustomerInvoice[];
+    if (isEdit) {
+      updatedList = existing.map((inv) => (inv.id === itemToSave.id ? itemToSave : inv));
+    } else {
+      updatedList = [itemToSave, ...existing];
+    }
+    localStorage.setItem(LOCAL_STORAGE_KEY_CUSTOMER_INVOICES, JSON.stringify(updatedList));
+  }
+
+  return itemToSave;
+}
+
+export async function deleteCustomerInvoiceFromStorage(id: string): Promise<boolean> {
+  try {
+    if (id && !id.startsWith("inv-")) {
+      await deleteDoc(doc(db, "customer_invoices", id));
+    }
+  } catch (e) {}
+
+  if (typeof window !== "undefined") {
+    const existing = await getCustomerInvoicesFromStorage();
+    const filtered = existing.filter((inv) => inv.id !== id);
+    localStorage.setItem(LOCAL_STORAGE_KEY_CUSTOMER_INVOICES, JSON.stringify(filtered));
+  }
+  return true;
+}
+
