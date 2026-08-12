@@ -403,8 +403,8 @@ export default function InvoicesPage() {
               </div>
 
               {/* BILL TO Box with Illustration Graphic on Right */}
-              <div className="grid grid-cols-12 gap-4 items-center">
-                <div className="col-span-7 bg-[#eef4ff] p-4 rounded-xl border border-blue-100 text-xs space-y-1">
+              <div style={{ display: "flex", flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: "16px", width: "100%" }}>
+                <div style={{ width: "58%", flexShrink: 0 }} className="bg-[#eef4ff] p-4 rounded-xl border border-blue-100 text-xs space-y-1">
                   <span className="text-[10px] font-bold text-[#004bb7] uppercase tracking-wider block mb-1">
                     BILL TO
                   </span>
@@ -416,7 +416,7 @@ export default function InvoicesPage() {
                 </div>
 
                 {/* Vector Graphic Matching Mock Image */}
-                <div className="col-span-5 flex items-center justify-end pr-4 select-none">
+                <div style={{ width: "38%", flexShrink: 0, display: "flex", justifyContent: "flex-end" }} className="select-none">
                   <div className="relative w-44 h-24 flex items-end justify-center">
                     <div className="absolute top-0 left-6 w-24 h-20 bg-white border-2 border-[#004bb7] rounded-lg shadow-2xs p-2 flex flex-col justify-between">
                       <div className="text-[8px] font-bold text-[#004bb7] border-b border-blue-200 pb-1 uppercase tracking-tighter">
@@ -484,8 +484,8 @@ export default function InvoicesPage() {
               </table>
 
               {/* Bottom Section */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
-                <div className="space-y-4 text-xs">
+              <div style={{ display: "flex", flexDirection: "row", justifyContent: "space-between", gap: "24px", width: "100%", paddingTop: "8px" }}>
+                <div style={{ width: "48%", flexShrink: 0 }} className="space-y-4 text-xs">
                   {previewInvoice.notes && (
                     <div>
                       <span className="font-bold text-gray-900 block mb-0.5">NOTES</span>
@@ -501,34 +501,46 @@ export default function InvoicesPage() {
                     </p>
                   </div>
 
+                  {/* Bank Details Box */}
                   <div className="bg-[#eef4ff] p-3.5 rounded-xl border border-blue-100 space-y-1">
                     <span className="font-bold text-[#004bb7] block mb-1">BANK DETAILS</span>
-                    <div className="grid grid-cols-3 gap-1 text-[11px]">
-                      <span className="text-gray-500">Bank Name</span>
-                      <span className="col-span-2 font-semibold text-gray-900">
-                        : {previewInvoice.myCompanyDetails.bankName || "HDFC Bank"}
-                      </span>
-                      <span className="text-gray-500">Account Name</span>
-                      <span className="col-span-2 font-semibold text-gray-900">
-                        : {previewInvoice.myCompanyDetails.accountName || previewInvoice.myCompanyDetails.companyName}
-                      </span>
-                      <span className="text-gray-500">Account No.</span>
-                      <span className="col-span-2 font-bold font-mono text-gray-900">
-                        : {previewInvoice.myCompanyDetails.accountNumber || "50200012345678"}
-                      </span>
-                      <span className="text-gray-500">IFSC Code</span>
-                      <span className="col-span-2 font-bold font-mono text-gray-900">
-                        : {previewInvoice.myCompanyDetails.ifscCode || "HDFC0001234"}
-                      </span>
-                      <span className="text-gray-500">Branch</span>
-                      <span className="col-span-2 font-semibold text-gray-900">
-                        : {previewInvoice.myCompanyDetails.branch || "Koramangala, Bengaluru"}
-                      </span>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "3px", fontSize: "11px" }}>
+                      <div style={{ display: "flex", flexDirection: "row", alignItems: "center", width: "100%" }}>
+                        <span style={{ width: "95px", minWidth: "95px", flexShrink: 0, color: "#6b7280" }}>Bank Name</span>
+                        <span style={{ fontWeight: 600, color: "#111827" }}>
+                          : {previewInvoice.myCompanyDetails.bankName || "HDFC Bank"}
+                        </span>
+                      </div>
+                      <div style={{ display: "flex", flexDirection: "row", alignItems: "center", width: "100%" }}>
+                        <span style={{ width: "95px", minWidth: "95px", flexShrink: 0, color: "#6b7280" }}>Account Name</span>
+                        <span style={{ fontWeight: 600, color: "#111827" }}>
+                          : {previewInvoice.myCompanyDetails.accountName || previewInvoice.myCompanyDetails.companyName}
+                        </span>
+                      </div>
+                      <div style={{ display: "flex", flexDirection: "row", alignItems: "center", width: "100%" }}>
+                        <span style={{ width: "95px", minWidth: "95px", flexShrink: 0, color: "#6b7280" }}>Account No.</span>
+                        <span style={{ fontWeight: 700, fontFamily: "monospace", color: "#111827" }}>
+                          : {previewInvoice.myCompanyDetails.accountNumber || "50200012345678"}
+                        </span>
+                      </div>
+                      <div style={{ display: "flex", flexDirection: "row", alignItems: "center", width: "100%" }}>
+                        <span style={{ width: "95px", minWidth: "95px", flexShrink: 0, color: "#6b7280" }}>IFSC Code</span>
+                        <span style={{ fontWeight: 700, fontFamily: "monospace", color: "#111827" }}>
+                          : {previewInvoice.myCompanyDetails.ifscCode || "HDFC0001234"}
+                        </span>
+                      </div>
+                      <div style={{ display: "flex", flexDirection: "row", alignItems: "center", width: "100%" }}>
+                        <span style={{ width: "95px", minWidth: "95px", flexShrink: 0, color: "#6b7280" }}>Branch</span>
+                        <span style={{ fontWeight: 600, color: "#111827" }}>
+                          : {previewInvoice.myCompanyDetails.branch || "Koramangala, Bengaluru"}
+                        </span>
+                      </div>
                     </div>
                   </div>
                 </div>
 
-                <div className="space-y-6 text-xs">
+                {/* Right Calculations & Signature / QR Code */}
+                <div style={{ width: "48%", flexShrink: 0 }} className="space-y-6 text-xs">
                   <div className="space-y-2 bg-gray-50 p-3.5 rounded-xl border border-gray-200">
                     <div className="flex justify-between text-gray-700">
                       <span>Sub Total</span>

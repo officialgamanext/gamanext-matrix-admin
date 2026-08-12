@@ -48,3 +48,94 @@ select:disabled,
 .cursor-not-allowed {
   cursor: not-allowed !important;
 }
+
+/* ========================================================================== */
+/* PRINT STYLES FOR TAX INVOICES & PDF GENERATION                             */
+/* ========================================================================== */
+@media print {
+  /* Remove browser headers (date, URL) & footers (page numbers) */
+  @page {
+    size: A4 portrait;
+    margin: 0 !important;
+  }
+
+  html,
+  body {
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Force exact background colors, graphics, and borders */
+  *,
+  *::before,
+  *::after {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Hide entire document body and UI chrome by default */
+  body * {
+    visibility: hidden !important;
+  }
+
+  /* Make printable invoice container and its contents visible */
+  #printable-invoice,
+  #printable-invoice * {
+    visibility: visible !important;
+  }
+
+  /* Position invoice container flush at top-left of printable page */
+  #printable-invoice {
+    position: fixed !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 10mm 15mm !important;
+    border: none !important;
+    box-shadow: none !important;
+    background-color: #ffffff !important;
+    box-sizing: border-box !important;
+  }
+
+  /* Ensure grid and flex layout stay side-by-side in print mode */
+  #printable-invoice .grid,
+  #printable-invoice .grid-cols-2,
+  #printable-invoice .md\:grid-cols-2 {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  #printable-invoice .flex {
+    display: flex !important;
+  }
+
+  #printable-invoice .flex-row {
+    flex-direction: row !important;
+  }
+
+  #printable-invoice .items-center {
+    align-items: center !important;
+  }
+
+  #printable-invoice .justify-between {
+    justify-content: space-between !important;
+  }
+
+  #printable-invoice .shrink-0 {
+    flex-shrink: 0 !important;
+  }
+
+  /* Prevent page breaks inside critical blocks */
+  #printable-invoice tr,
+  #printable-invoice table {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+}
+
+
