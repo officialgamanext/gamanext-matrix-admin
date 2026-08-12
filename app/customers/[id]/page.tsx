@@ -1853,9 +1853,11 @@ export default function CustomerDetailPage({
                   </span>
                   <div className="font-bold text-gray-900 text-sm">{previewInvoice.customerDetails.businessName}</div>
                   <div className="text-gray-700">{previewInvoice.customerDetails.address}</div>
-                  <div className="font-bold font-mono text-gray-900 mt-1">
-                    GSTIN: {previewInvoice.customerDetails.gstin || ""}
-                  </div>
+                  {previewInvoice.customerDetails.gstin && (
+                    <div className="font-bold font-mono text-gray-900 mt-1">
+                      GSTIN: {previewInvoice.customerDetails.gstin}
+                    </div>
+                  )}
                 </div>
 
                 {/* Vector Graphic Matching Mock Image */}
