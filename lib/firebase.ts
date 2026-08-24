@@ -2568,22 +2568,19 @@ export async function getSavedPayslipsForEmployee(
   employeeId: string,
   year?: number | string
 ): Promise<MonthlyPayslip[]> {
+  const payslipMap = new Map<string, MonthlyPayslip>();
+
   try {
     const q = query(
       collection(db, "payslips"),
       where("employeeId", "==", employeeId)
     );
     const snapshot = await getDocs(q);
-    const list: MonthlyPayslip[] = [];
     snapshot.forEach((docSnap) => {
-      list.push({ id: docSnap.id, ...docSnap.data() } as MonthlyPayslip);
+      const data = { id: docSnap.id, ...docSnap.data() } as MonthlyPayslip;
+      const key = `${data.employeeId}-${data.year}-${data.monthIndex}`;
+      payslipMap.set(key, data);
     });
-    if (list.length > 0) {
-      const filtered = year && year !== "All"
-        ? list.filter((p) => String(p.year) === String(year))
-        : list;
-      return filtered.sort((a, b) => (b.year - a.year) || (b.monthIndex - a.monthIndex));
-    }
   } catch (e) {}
 
   if (typeof window !== "undefined") {
@@ -2591,15 +2588,23 @@ export async function getSavedPayslipsForEmployee(
     if (data) {
       try {
         const list: MonthlyPayslip[] = JSON.parse(data);
-        const filtered = list.filter((p) => p.employeeId === employeeId);
-        const yearFiltered = year && year !== "All"
-          ? filtered.filter((p) => String(p.year) === String(year))
-          : filtered;
-        return yearFiltered.sort((a, b) => (b.year - a.year) || (b.monthIndex - a.monthIndex));
+        list.forEach((p) => {
+          if (p.employeeId === employeeId) {
+            const key = `${p.employeeId}-${p.year}-${p.monthIndex}`;
+            if (!payslipMap.has(key)) {
+              payslipMap.set(key, p);
+            }
+          }
+        });
       } catch (e) {}
     }
   }
-  return [];
+
+  const list = Array.from(payslipMap.values());
+  const filtered = year && year !== "All"
+    ? list.filter((p) => String(p.year) === String(year))
+    : list;
+  return filtered.sort((a, b) => (b.year - a.year) || (b.monthIndex - a.monthIndex));
 }
 
 export async function saveGeneratedPayslip(payslip: MonthlyPayslip): Promise<MonthlyPayslip> {

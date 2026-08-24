@@ -280,7 +280,11 @@ export default function EmployeeDetailPage({
             const savedAug = await saveGeneratedPayslip(initialAug);
             currentSaved = [savedAug];
           }
-          setSavedPayslips(currentSaved);
+          const pMap = new Map<string, MonthlyPayslip>();
+          currentSaved.forEach((p) => {
+            pMap.set(`${p.employeeId}-${p.year}-${p.monthIndex}`, p);
+          });
+          setSavedPayslips(Array.from(pMap.values()).sort((a, b) => b.year - a.year || b.monthIndex - a.monthIndex));
 
           if (projData.some((p) => p.status === "Active")) {
             const activeProj = projData.find((p) => p.status === "Active");
@@ -2943,7 +2947,10 @@ export default function EmployeeDetailPage({
                             .filter((p) => payslipsYear === "All" || String(p.year) === payslipsYear)
                             .sort((a, b) => b.year - a.year || b.monthIndex - a.monthIndex)
                             .map((payslip) => (
-                              <tr key={payslip.id} className="hover:bg-gray-50/70 transition-colors">
+                              <tr
+                                key={`payslip-row-${payslip.id || payslip.employeeId}-${payslip.year}-${payslip.monthIndex}`}
+                                className="hover:bg-gray-50/70 transition-colors"
+                              >
                                 <td className="py-3.5 px-4 font-bold text-gray-900">
                                   <div className="flex items-center space-x-2">
                                     <Receipt className="w-4 h-4 text-[#0B4FBA] shrink-0" />
