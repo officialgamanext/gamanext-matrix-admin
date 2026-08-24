@@ -32,6 +32,10 @@ import {
   saveYearlyReviewForEmployee,
   getPerformanceBandsForEmployee,
   savePerformanceBandForEmployee,
+  getSalaryStructureForEmployee,
+  saveSalaryStructureForEmployee,
+  generateMonthlyPayslips,
+  amountInWords,
   EmployeeData,
   ProjectAllocation,
   LeaveRequest,
@@ -41,6 +45,9 @@ import {
   EmployeeRequest,
   YearlyReview,
   PerformanceBandRecord,
+  EmployeeSalaryStructure,
+  SalaryAttribute,
+  MonthlyPayslip,
 } from "@/lib/firebase";
 import {
   ArrowLeft,
@@ -74,6 +81,15 @@ import {
   PowerOff,
   Trash2,
   Info,
+  Printer,
+  Download,
+  Eye,
+  Calculator,
+  FileSpreadsheet,
+  Layers,
+  ArrowUpRight,
+  MinusCircle,
+  X,
 } from "lucide-react";
 
 // Helper to determine fiscal quarter based on month (1-indexed)
@@ -177,6 +193,19 @@ export default function EmployeeDetailPage({
   const [bandRemarks, setBandRemarks] = useState("");
   const [addingBand, setAddingBand] = useState(false);
 
+  // Tab 8: Salary & Payroll
+  const [salaryStructure, setSalaryStructure] = useState<EmployeeSalaryStructure | null>(null);
+  const [earningsList, setEarningsList] = useState<SalaryAttribute[]>([]);
+  const [deductionsList, setDeductionsList] = useState<SalaryAttribute[]>([]);
+  const [newEarningName, setNewEarningName] = useState("");
+  const [newEarningAmount, setNewEarningAmount] = useState("");
+  const [newDeductionName, setNewDeductionName] = useState("");
+  const [newDeductionAmount, setNewDeductionAmount] = useState("");
+  const [savingSalary, setSavingSalary] = useState(false);
+  const [salarySuccessMsg, setSalarySuccessMsg] = useState("");
+  const [payslipsYear, setPayslipsYear] = useState("2026");
+  const [previewPayslip, setPreviewPayslip] = useState<MonthlyPayslip | null>(null);
+
   // Load employee details and tab datasets
   useEffect(() => {
     async function loadData() {
@@ -199,6 +228,7 @@ export default function EmployeeDetailPage({
             reqData,
             revData,
             bandData,
+            salaryData,
           ] = await Promise.all([
             getProjectsForEmployee(empKey),
             getLeavesForEmployee(empKey),
@@ -210,6 +240,7 @@ export default function EmployeeDetailPage({
             getRequestsForEmployee(empKey),
             getYearlyReviewsForEmployee(empKey),
             getPerformanceBandsForEmployee(empKey),
+            getSalaryStructureForEmployee(empKey, emp),
           ]);
 
           setProjects(projData);
@@ -222,6 +253,9 @@ export default function EmployeeDetailPage({
           setEmpRequests(reqData);
           setReviews(revData);
           setBands(bandData);
+          setSalaryStructure(salaryData);
+          setEarningsList(salaryData.earnings || []);
+          setDeductionsList(salaryData.deductions || []);
 
           if (projData.some((p) => p.status === "Active")) {
             const activeProj = projData.find((p) => p.status === "Active");
@@ -2332,13 +2366,730 @@ export default function EmployeeDetailPage({
         )}
 
         {/* TAB 8: SALARY & PAYROLL */}
-        {activeTab === "salary" && (
-          <div className="bg-white p-8 rounded-xl border border-gray-200/80 shadow-2xs text-center space-y-3">
-            <DollarSign className="w-10 h-10 text-[#0B4FBA] mx-auto p-2 bg-blue-50 border border-blue-200 rounded-full" />
-            <h2 className="text-base font-bold text-gray-900">Salary & Payroll Management</h2>
-            <p className="text-xs text-gray-500 max-w-md mx-auto">
-              Salary structure, monthly payslips, and payroll processing for {employee.firstName} {employee.lastName} will be configured in the next phase.
-            </p>
+        {activeTab === "salary" && employee && (
+          <div className="space-y-5">
+            {/* Real-time Calculation Summary Cards */}
+            {(() => {
+              const currentGross = earningsList.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+              const currentDeductions = deductionsList.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+              const currentNet = currentGross - currentDeductions;
+              const generatedPayslips = generateMonthlyPayslips(
+                employee,
+                {
+                  employeeId: employee.id || employee.employeeId,
+                  earnings: earningsList,
+                  deductions: deductionsList,
+                  grossSalary: currentGross,
+                  totalDeductions: currentDeductions,
+                  netPay: currentNet,
+                },
+                parseInt(payslipsYear) || 2026
+              );
+
+              return (
+                <>
+                  {/* Top Metric Cards */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    {/* Gross Earnings Card */}
+                    <div className="bg-white p-4 rounded-xl border border-gray-200/80 shadow-2xs space-y-1">
+                      <div className="flex items-center justify-between text-xs text-gray-500 font-semibold">
+                        <span>Total Gross Earnings</span>
+                        <div className="p-1.5 bg-blue-50 text-[#0B4FBA] rounded-lg">
+                          <Layers className="w-4 h-4" />
+                        </div>
+                      </div>
+                      <div className="text-2xl font-black text-gray-900 tracking-tight">
+                        ₹ {currentGross.toLocaleString("en-IN")}
+                      </div>
+                      <p className="text-[11px] text-gray-400 font-medium">
+                        Sum of all {earningsList.length} earning attributes
+                      </p>
+                    </div>
+
+                    {/* Total Deductions Card */}
+                    <div className="bg-white p-4 rounded-xl border border-gray-200/80 shadow-2xs space-y-1">
+                      <div className="flex items-center justify-between text-xs text-gray-500 font-semibold">
+                        <span>Total Deductions</span>
+                        <div className="p-1.5 bg-rose-50 text-rose-600 rounded-lg">
+                          <MinusCircle className="w-4 h-4" />
+                        </div>
+                      </div>
+                      <div className="text-2xl font-black text-rose-600 tracking-tight">
+                        - ₹ {currentDeductions.toLocaleString("en-IN")}
+                      </div>
+                      <p className="text-[11px] text-gray-400 font-medium">
+                        Sum of all {deductionsList.length} deduction attributes
+                      </p>
+                    </div>
+
+                    {/* Net Take-Home Pay Card */}
+                    <div className="bg-gradient-to-br from-[#0B4FBA] to-[#003882] text-white p-4 rounded-xl shadow-xs space-y-1">
+                      <div className="flex items-center justify-between text-xs text-blue-100 font-semibold">
+                        <span>Net Take-Home Pay</span>
+                        <div className="p-1.5 bg-white/15 rounded-lg text-white">
+                          <DollarSign className="w-4 h-4" />
+                        </div>
+                      </div>
+                      <div className="text-2xl font-black text-white tracking-tight">
+                        ₹ {currentNet.toLocaleString("en-IN")}
+                      </div>
+                      <p className="text-[11px] text-blue-200 font-medium">
+                        Gross minus Deductions (Per Month)
+                      </p>
+                    </div>
+                  </div>
+
+                  {salarySuccessMsg && (
+                    <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs font-semibold text-emerald-800 flex items-center space-x-2 animate-in fade-in">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                      <span>{salarySuccessMsg}</span>
+                    </div>
+                  )}
+
+                  {/* Salary Structure Configuration: 2 Columns */}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    {/* Column 1: Earnings & Allowances */}
+                    <div className="bg-white rounded-xl border border-gray-200/80 shadow-2xs overflow-hidden flex flex-col justify-between">
+                      <div>
+                        <div className="p-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
+                          <div className="flex items-center space-x-2">
+                            <div className="p-1.5 bg-emerald-50 text-emerald-700 rounded-lg">
+                              <Plus className="w-4 h-4" />
+                            </div>
+                            <h3 className="font-bold text-xs text-gray-900">Earnings & Allowances</h3>
+                          </div>
+                          <div className="flex items-center space-x-3">
+                            <span className="text-xs font-bold text-emerald-700">
+                              Subtotal: ₹ {currentGross.toLocaleString("en-IN")}
+                            </span>
+                            <button
+                              type="button"
+                              disabled={savingSalary}
+                              onClick={async () => {
+                                if (!employee) return;
+                                setSavingSalary(true);
+                                setSalarySuccessMsg("");
+                                try {
+                                  const empKey = employee.id || employee.employeeId;
+                                  const saved = await saveSalaryStructureForEmployee({
+                                    id: salaryStructure?.id,
+                                    employeeId: empKey,
+                                    earnings: earningsList,
+                                    deductions: deductionsList,
+                                    grossSalary: currentGross,
+                                    totalDeductions: currentDeductions,
+                                    netPay: currentNet,
+                                  }, employee.id);
+                                  setSalaryStructure(saved);
+                                  setEmployee((prev) => prev ? { ...prev, salaryStructure: saved } : prev);
+                                  setSalarySuccessMsg("Earnings & allowances saved successfully!");
+                                  setTimeout(() => setSalarySuccessMsg(""), 4000);
+                                } catch (err) {
+                                  console.error("Save error:", err);
+                                  alert("Failed to save earnings.");
+                                } finally {
+                                  setSavingSalary(false);
+                                }
+                              }}
+                              className="px-2.5 py-1 text-[11px] font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-md flex items-center space-x-1 shadow-2xs transition-all disabled:opacity-50 cursor-pointer"
+                            >
+                              <Save className="w-3 h-3" />
+                              <span>Save Earnings</span>
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Earnings Attribute Items List */}
+                        <div className="p-4 space-y-2.5">
+                          {earningsList.map((item) => (
+                            <div
+                              key={item.id}
+                              className="flex items-center justify-between gap-3 p-2.5 bg-gray-50/70 hover:bg-gray-50 rounded-lg border border-gray-200/60 transition-colors"
+                            >
+                              <div className="flex items-center space-x-2 flex-1 min-w-0">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0"></span>
+                                <span className="text-xs font-semibold text-gray-800 truncate">
+                                  {item.name}
+                                </span>
+                              </div>
+
+                              <div className="flex items-center space-x-2 shrink-0">
+                                <div className="relative">
+                                  <span className="absolute left-2.5 top-1.5 text-xs text-gray-400 font-bold">
+                                    ₹
+                                  </span>
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    value={item.amount}
+                                    onChange={(e) => {
+                                      const val = parseFloat(e.target.value) || 0;
+                                      setEarningsList((prev) =>
+                                        prev.map((it) => (it.id === item.id ? { ...it, amount: val } : it))
+                                      );
+                                    }}
+                                    className="w-28 pl-6 pr-2 py-1 bg-white border border-gray-300 rounded-md text-xs font-bold text-gray-900 text-right outline-none focus:ring-2 focus:ring-[#0B4FBA]/30"
+                                  />
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => setEarningsList((prev) => prev.filter((it) => it.id !== item.id))}
+                                  className="p-1 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-colors cursor-pointer"
+                                  title="Remove attribute"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Add Earning Attribute Inline Form */}
+                      <div className="p-4 border-t border-gray-100 bg-gray-50/30">
+                        <div className="text-[11px] font-bold text-gray-700 mb-2 flex items-center space-x-1">
+                          <Plus className="w-3 h-3 text-[#0B4FBA]" />
+                          <span>Add New Earning Attribute</span>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 text-xs">
+                          <input
+                            type="text"
+                            placeholder="Attribute Name (e.g. Performance Bonus)"
+                            value={newEarningName}
+                            onChange={(e) => setNewEarningName(e.target.value)}
+                            className="sm:col-span-7 px-3 py-1.5 bg-white border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-[#0B4FBA]/30"
+                          />
+                          <input
+                            type="number"
+                            min="0"
+                            placeholder="Amount (₹)"
+                            value={newEarningAmount}
+                            onChange={(e) => setNewEarningAmount(e.target.value)}
+                            className="sm:col-span-3 px-3 py-1.5 bg-white border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-[#0B4FBA]/30"
+                          />
+                          <button
+                            type="button"
+                            disabled={!newEarningName.trim() || !newEarningAmount}
+                            onClick={() => {
+                              if (!newEarningName.trim() || !newEarningAmount) return;
+                              setEarningsList((prev) => [
+                                ...prev,
+                                {
+                                  id: `earn-${Date.now()}`,
+                                  name: newEarningName.trim(),
+                                  amount: parseFloat(newEarningAmount) || 0,
+                                },
+                              ]);
+                              setNewEarningName("");
+                              setNewEarningAmount("");
+                            }}
+                            className="sm:col-span-2 px-3 py-1.5 bg-[#0B4FBA] hover:bg-[#003882] text-white font-semibold rounded-lg shadow-xs transition-all disabled:opacity-50 flex items-center justify-center space-x-1 cursor-pointer"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            <span>Add</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Column 2: Deductions & Contributions */}
+                    <div className="bg-white rounded-xl border border-gray-200/80 shadow-2xs overflow-hidden flex flex-col justify-between">
+                      <div>
+                        <div className="p-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
+                          <div className="flex items-center space-x-2">
+                            <div className="p-1.5 bg-rose-50 text-rose-700 rounded-lg">
+                              <MinusCircle className="w-4 h-4" />
+                            </div>
+                            <h3 className="font-bold text-xs text-gray-900">Deductions & Contributions</h3>
+                          </div>
+                          <div className="flex items-center space-x-3">
+                            <span className="text-xs font-bold text-rose-600">
+                              Subtotal: ₹ {currentDeductions.toLocaleString("en-IN")}
+                            </span>
+                            <button
+                              type="button"
+                              disabled={savingSalary}
+                              onClick={async () => {
+                                if (!employee) return;
+                                setSavingSalary(true);
+                                setSalarySuccessMsg("");
+                                try {
+                                  const empKey = employee.id || employee.employeeId;
+                                  const saved = await saveSalaryStructureForEmployee({
+                                    id: salaryStructure?.id,
+                                    employeeId: empKey,
+                                    earnings: earningsList,
+                                    deductions: deductionsList,
+                                    grossSalary: currentGross,
+                                    totalDeductions: currentDeductions,
+                                    netPay: currentNet,
+                                  }, employee.id);
+                                  setSalaryStructure(saved);
+                                  setEmployee((prev) => prev ? { ...prev, salaryStructure: saved } : prev);
+                                  setSalarySuccessMsg("Deductions & contributions saved successfully!");
+                                  setTimeout(() => setSalarySuccessMsg(""), 4000);
+                                } catch (err) {
+                                  console.error("Save error:", err);
+                                  alert("Failed to save deductions.");
+                                } finally {
+                                  setSavingSalary(false);
+                                }
+                              }}
+                              className="px-2.5 py-1 text-[11px] font-bold bg-rose-600 hover:bg-rose-700 text-white rounded-md flex items-center space-x-1 shadow-2xs transition-all disabled:opacity-50 cursor-pointer"
+                            >
+                              <Save className="w-3 h-3" />
+                              <span>Save Deductions</span>
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Deductions Attribute Items List */}
+                        <div className="p-4 space-y-2.5">
+                          {deductionsList.map((item) => (
+                            <div
+                              key={item.id}
+                              className="flex items-center justify-between gap-3 p-2.5 bg-gray-50/70 hover:bg-gray-50 rounded-lg border border-gray-200/60 transition-colors"
+                            >
+                              <div className="flex items-center space-x-2 flex-1 min-w-0">
+                                <span className="w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0"></span>
+                                <span className="text-xs font-semibold text-gray-800 truncate">
+                                  {item.name}
+                                </span>
+                              </div>
+
+                              <div className="flex items-center space-x-2 shrink-0">
+                                <div className="relative">
+                                  <span className="absolute left-2.5 top-1.5 text-xs text-gray-400 font-bold">
+                                    ₹
+                                  </span>
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    value={item.amount}
+                                    onChange={(e) => {
+                                      const val = parseFloat(e.target.value) || 0;
+                                      setDeductionsList((prev) =>
+                                        prev.map((it) => (it.id === item.id ? { ...it, amount: val } : it))
+                                      );
+                                    }}
+                                    className="w-28 pl-6 pr-2 py-1 bg-white border border-gray-300 rounded-md text-xs font-bold text-rose-600 text-right outline-none focus:ring-2 focus:ring-[#0B4FBA]/30"
+                                  />
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => setDeductionsList((prev) => prev.filter((it) => it.id !== item.id))}
+                                  className="p-1 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-colors cursor-pointer"
+                                  title="Remove attribute"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Add Deduction Attribute Inline Form */}
+                      <div className="p-4 border-t border-gray-100 bg-gray-50/30">
+                        <div className="text-[11px] font-bold text-gray-700 mb-2 flex items-center space-x-1">
+                          <Plus className="w-3 h-3 text-rose-600" />
+                          <span>Add New Deduction Attribute</span>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 text-xs">
+                          <input
+                            type="text"
+                            placeholder="Attribute Name (e.g. Income Tax / TDS)"
+                            value={newDeductionName}
+                            onChange={(e) => setNewDeductionName(e.target.value)}
+                            className="sm:col-span-7 px-3 py-1.5 bg-white border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-[#0B4FBA]/30"
+                          />
+                          <input
+                            type="number"
+                            min="0"
+                            placeholder="Amount (₹)"
+                            value={newDeductionAmount}
+                            onChange={(e) => setNewDeductionAmount(e.target.value)}
+                            className="sm:col-span-3 px-3 py-1.5 bg-white border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-[#0B4FBA]/30"
+                          />
+                          <button
+                            type="button"
+                            disabled={!newDeductionName.trim() || !newDeductionAmount}
+                            onClick={() => {
+                              if (!newDeductionName.trim() || !newDeductionAmount) return;
+                              setDeductionsList((prev) => [
+                                ...prev,
+                                {
+                                  id: `ded-${Date.now()}`,
+                                  name: newDeductionName.trim(),
+                                  amount: parseFloat(newDeductionAmount) || 0,
+                                },
+                              ]);
+                              setNewDeductionName("");
+                              setNewDeductionAmount("");
+                            }}
+                            className="sm:col-span-2 px-3 py-1.5 bg-[#0B4FBA] hover:bg-[#003882] text-white font-semibold rounded-lg shadow-xs transition-all disabled:opacity-50 flex items-center justify-center space-x-1 cursor-pointer"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            <span>Add</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Save Salary Structure Action Bar */}
+                  <div className="flex items-center justify-between bg-white p-4 rounded-xl border border-gray-200/80 shadow-2xs">
+                    <div className="text-xs text-gray-500">
+                      Changes will be permanently saved to employee profile and reflected in monthly payslips.
+                    </div>
+                    <button
+                      type="button"
+                      disabled={savingSalary}
+                      onClick={async () => {
+                        if (!employee) return;
+                        setSavingSalary(true);
+                        setSalarySuccessMsg("");
+                        try {
+                          const empKey = employee.id || employee.employeeId;
+                          const saved = await saveSalaryStructureForEmployee({
+                            id: salaryStructure?.id,
+                            employeeId: empKey,
+                            earnings: earningsList,
+                            deductions: deductionsList,
+                            grossSalary: currentGross,
+                            totalDeductions: currentDeductions,
+                            netPay: currentNet,
+                          }, employee.id);
+                          setSalaryStructure(saved);
+                          setEmployee((prev) => prev ? { ...prev, salaryStructure: saved } : prev);
+                          setSalarySuccessMsg("Complete salary structure saved and assigned to employee successfully!");
+                          setTimeout(() => setSalarySuccessMsg(""), 4000);
+                        } catch (err) {
+                          console.error("Save salary structure error:", err);
+                          alert("Failed to save salary structure.");
+                        } finally {
+                          setSavingSalary(false);
+                        }
+                      }}
+                      className="px-5 py-2 bg-[#0B4FBA] hover:bg-[#003882] text-white text-xs font-semibold rounded-lg shadow-xs transition-all flex items-center space-x-1.5 disabled:opacity-50 cursor-pointer"
+                    >
+                      {savingSalary ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Save className="w-4 h-4" />
+                      )}
+                      <span>Save Salary Structure</span>
+                    </button>
+                  </div>
+
+                  {/* Monthly Auto-Generated Payslips Table */}
+                  <div className="bg-white rounded-xl border border-gray-200/80 shadow-2xs overflow-hidden">
+                    <div className="p-4 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-gray-50/50">
+                      <div className="flex items-center space-x-2">
+                        <div className="p-1.5 bg-blue-50 text-[#0B4FBA] rounded-lg">
+                          <FileSpreadsheet className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <h3 className="font-bold text-xs text-gray-900">
+                            Auto-Generated Monthly Payslips ({generatedPayslips.length})
+                          </h3>
+                          <p className="text-[11px] text-gray-500">
+                            Auto-generated on the 1st of every month with current salary attributes
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Year Selector */}
+                      <div className="flex items-center space-x-2 text-xs">
+                        <span className="font-semibold text-gray-600">Year:</span>
+                        <div className="w-24">
+                          <CustomDropdown
+                            options={[
+                              { value: "2026", label: "2026" },
+                              { value: "2025", label: "2025" },
+                            ]}
+                            value={payslipsYear}
+                            onChange={(val) => setPayslipsYear(val)}
+                            placeholder="Select year"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-xs">
+                        <thead className="bg-gray-50 text-gray-500 uppercase tracking-wider text-[10px] font-bold border-b border-gray-200">
+                          <tr>
+                            <th className="py-3 px-4">Pay Period</th>
+                            <th className="py-3 px-4">Payment Date</th>
+                            <th className="py-3 px-4">Paid Days</th>
+                            <th className="py-3 px-4 text-right">Gross Earnings</th>
+                            <th className="py-3 px-4 text-right">Deductions</th>
+                            <th className="py-3 px-4 text-right">Net Salary</th>
+                            <th className="py-3 px-4 text-center">Status</th>
+                            <th className="py-3 px-4 text-right">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                          {generatedPayslips.map((payslip) => (
+                            <tr key={payslip.id} className="hover:bg-gray-50/70 transition-colors">
+                              <td className="py-3.5 px-4 font-bold text-gray-900">
+                                <div className="flex items-center space-x-2">
+                                  <Receipt className="w-4 h-4 text-[#0B4FBA] shrink-0" />
+                                  <span>{payslip.month}</span>
+                                </div>
+                              </td>
+                              <td className="py-3.5 px-4 text-gray-600 font-mono">
+                                {payslip.paymentDate}
+                              </td>
+                              <td className="py-3.5 px-4 text-gray-700">
+                                {payslip.paidDays} / {payslip.workingDays} Days
+                              </td>
+                              <td className="py-3.5 px-4 font-semibold text-gray-900 text-right">
+                                ₹ {payslip.grossSalary.toLocaleString("en-IN")}
+                              </td>
+                              <td className="py-3.5 px-4 font-semibold text-rose-600 text-right">
+                                ₹ {payslip.totalDeductions.toLocaleString("en-IN")}
+                              </td>
+                              <td className="py-3.5 px-4 font-black text-emerald-700 text-right">
+                                ₹ {payslip.netPay.toLocaleString("en-IN")}
+                              </td>
+                              <td className="py-3.5 px-4 text-center">
+                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                  <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+                                  <span>{payslip.status}</span>
+                                </span>
+                              </td>
+                              <td className="py-3.5 px-4 text-right">
+                                <div className="flex items-center justify-end space-x-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => setPreviewPayslip(payslip)}
+                                    className="px-2.5 py-1 text-xs font-semibold text-[#0B4FBA] bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-md transition-colors flex items-center space-x-1 cursor-pointer"
+                                  >
+                                    <Eye className="w-3.5 h-3.5" />
+                                    <span>View</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setPreviewPayslip(payslip);
+                                      setTimeout(() => window.print(), 200);
+                                    }}
+                                    className="px-2.5 py-1 text-xs font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 border border-gray-200 rounded-md transition-colors flex items-center space-x-1 cursor-pointer"
+                                    title="Download / Print PDF"
+                                  >
+                                    <Download className="w-3.5 h-3.5 text-gray-600" />
+                                    <span>PDF</span>
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </>
+              );
+            })()}
+          </div>
+        )}
+
+        {/* PRINTABLE PAYSLIP MODAL */}
+        {previewPayslip && employee && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs overflow-y-auto">
+            <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 w-full max-w-3xl overflow-hidden animate-in fade-in zoom-in-95 my-8">
+              {/* Modal Top Controls (Hidden during print) */}
+              <div className="flex items-center justify-between p-4 border-b border-gray-100 bg-gray-50/80">
+                <div className="flex items-center space-x-2 text-gray-900 font-bold text-sm">
+                  <Receipt className="w-4 h-4 text-[#0B4FBA]" />
+                  <span>Salary Payslip - {previewPayslip.month}</span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={() => window.print()}
+                    className="px-3.5 py-1.5 bg-[#0B4FBA] hover:bg-[#003882] text-white text-xs font-semibold rounded-lg shadow-xs transition-all flex items-center space-x-1.5 cursor-pointer"
+                  >
+                    <Printer className="w-3.5 h-3.5" />
+                    <span>Download / Print PDF</span>
+                  </button>
+                  <button
+                    onClick={() => setPreviewPayslip(null)}
+                    className="p-1.5 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 cursor-pointer"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Printable Body (#printable-payslip) */}
+              <div className="p-8 space-y-6 bg-white text-gray-900 relative" id="printable-payslip">
+                {/* 1. Company Header */}
+                <div className="flex items-start justify-between border-b-2 border-[#0B4FBA] pb-4">
+                  <div className="space-y-1">
+                    <div className="flex items-center space-x-2">
+                      <span className="text-xl font-black text-[#0B4FBA] tracking-wider">GAMANEXT</span>
+                      <span className="text-xs font-bold bg-[#0B4FBA]/10 text-[#0B4FBA] px-2 py-0.5 rounded">
+                        MATRIX
+                      </span>
+                    </div>
+                    <p className="text-xs font-bold text-gray-800 uppercase tracking-tight">
+                      Gamanext Technologies Private Limited
+                    </p>
+                    <p className="text-[11px] text-gray-500 leading-tight">
+                      Matrix Tower, IT Park, HITEC City, Hyderabad - 500081<br />
+                      Email: hr@gamanext.com • Web: https://gamanext.com
+                    </p>
+                  </div>
+
+                  <div className="text-right space-y-1">
+                    <div className="text-base font-black text-gray-900 uppercase tracking-tight">
+                      Salary Payslip
+                    </div>
+                    <div className="text-xs font-bold text-[#0B4FBA] bg-blue-50 px-2.5 py-1 rounded border border-blue-200/80 inline-block">
+                      {previewPayslip.month}
+                    </div>
+                    <p className="text-[10px] text-gray-400 font-mono">
+                      Pay Date: {previewPayslip.paymentDate}
+                    </p>
+                  </div>
+                </div>
+
+                {/* 2. Employee Summary 2-Column Grid */}
+                <div className="grid grid-cols-2 gap-4 text-xs bg-gray-50/70 p-4 rounded-xl border border-gray-200/70">
+                  <div className="space-y-1.5">
+                    <div className="flex">
+                      <span className="w-28 font-semibold text-gray-500">Employee ID:</span>
+                      <span className="font-mono font-bold text-gray-900">{employee.employeeId}</span>
+                    </div>
+                    <div className="flex">
+                      <span className="w-28 font-semibold text-gray-500">Employee Name:</span>
+                      <span className="font-bold text-gray-900">{employee.firstName} {employee.lastName}</span>
+                    </div>
+                    <div className="flex">
+                      <span className="w-28 font-semibold text-gray-500">Designation:</span>
+                      <span className="text-gray-800">{employee.employeeRole}</span>
+                    </div>
+                    <div className="flex">
+                      <span className="w-28 font-semibold text-gray-500">Department:</span>
+                      <span className="text-gray-800">{employee.department || "Technology"}</span>
+                    </div>
+                    <div className="flex">
+                      <span className="w-28 font-semibold text-gray-500">Date of Joining:</span>
+                      <span className="text-gray-800">{employee.dateOfJoining || "—"}</span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <div className="flex">
+                      <span className="w-28 font-semibold text-gray-500">Bank Name:</span>
+                      <span className="font-semibold text-gray-800">{employee.bankName || "State Bank of India"}</span>
+                    </div>
+                    <div className="flex">
+                      <span className="w-28 font-semibold text-gray-500">Bank A/C No:</span>
+                      <span className="font-mono font-bold text-gray-900">{employee.bankAccountNumber || "•••• •••• 9821"}</span>
+                    </div>
+                    <div className="flex">
+                      <span className="w-28 font-semibold text-gray-500">IFSC Code:</span>
+                      <span className="font-mono text-gray-800">{employee.bankIfscCode || "SBIN0001234"}</span>
+                    </div>
+                    <div className="flex">
+                      <span className="w-28 font-semibold text-gray-500">PAN Number:</span>
+                      <span className="font-mono text-gray-800">{employee.panCardNumber || "—"}</span>
+                    </div>
+                    <div className="flex">
+                      <span className="w-28 font-semibold text-gray-500">Paid Days:</span>
+                      <span className="font-bold text-gray-900">{previewPayslip.paidDays} / {previewPayslip.workingDays} Days</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 3. Earnings & Deductions Breakdown Table */}
+                <div className="border border-gray-200 rounded-xl overflow-hidden text-xs">
+                  <div className="grid grid-cols-2 divide-x divide-gray-200">
+                    {/* Left: Earnings Column */}
+                    <div>
+                      <div className="bg-gray-100 p-2.5 font-bold text-gray-800 border-b border-gray-200 flex justify-between">
+                        <span>Earnings & Allowances</span>
+                        <span>Amount (₹)</span>
+                      </div>
+                      <div className="divide-y divide-gray-100">
+                        {previewPayslip.earnings.map((e) => (
+                          <div key={e.id} className="p-2.5 flex justify-between text-gray-700">
+                            <span>{e.name}</span>
+                            <span className="font-mono font-semibold">₹ {Number(e.amount).toLocaleString("en-IN")}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Right: Deductions Column */}
+                    <div>
+                      <div className="bg-gray-100 p-2.5 font-bold text-gray-800 border-b border-gray-200 flex justify-between">
+                        <span>Deductions</span>
+                        <span>Amount (₹)</span>
+                      </div>
+                      <div className="divide-y divide-gray-100">
+                        {previewPayslip.deductions.map((d) => (
+                          <div key={d.id} className="p-2.5 flex justify-between text-gray-700">
+                            <span>{d.name}</span>
+                            <span className="font-mono font-semibold text-rose-600">₹ {Number(d.amount).toLocaleString("en-IN")}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Subtotals Row */}
+                  <div className="grid grid-cols-2 divide-x divide-gray-200 bg-gray-50/80 border-t-2 border-gray-200 font-bold p-2.5">
+                    <div className="flex justify-between text-gray-900">
+                      <span>Total Gross Earnings</span>
+                      <span className="font-mono">₹ {previewPayslip.grossSalary.toLocaleString("en-IN")}</span>
+                    </div>
+                    <div className="flex justify-between text-rose-700">
+                      <span>Total Deductions</span>
+                      <span className="font-mono">- ₹ {previewPayslip.totalDeductions.toLocaleString("en-IN")}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 4. Net Salary & Amount in Words Card */}
+                <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-4 rounded-xl border border-blue-200 space-y-1.5">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-bold text-blue-900 uppercase tracking-wide">Net Salary Payable:</span>
+                    <span className="text-xl font-black text-[#0B4FBA] font-mono">
+                      ₹ {previewPayslip.netPay.toLocaleString("en-IN")}
+                    </span>
+                  </div>
+                  <div className="text-[11px] text-gray-600 font-medium">
+                    Amount in Words: <strong className="text-gray-900">{amountInWords(previewPayslip.netPay)}</strong>
+                  </div>
+                </div>
+
+                {/* 5. Footer & Signatures */}
+                <div className="pt-8 grid grid-cols-2 gap-8 text-xs border-t border-gray-200 text-center">
+                  <div className="space-y-8">
+                    <div className="h-8"></div>
+                    <div className="border-t border-gray-300 pt-1 text-gray-600 font-medium">
+                      Employee Signature
+                    </div>
+                  </div>
+                  <div className="space-y-8">
+                    <div className="h-8 flex items-center justify-center font-bold text-[#0B4FBA]">
+                      Gamanext HR / Payroll Dept.
+                    </div>
+                    <div className="border-t border-gray-300 pt-1 text-gray-600 font-medium">
+                      Authorized Signatory
+                    </div>
+                  </div>
+                </div>
+
+                <div className="text-[10px] text-gray-400 text-center pt-2">
+                  This is a system-generated electronic payslip issued by Gamanext Technologies Pvt. Ltd. and requires no physical stamp.
+                </div>
+              </div>
+            </div>
           </div>
         )}
       </div>
