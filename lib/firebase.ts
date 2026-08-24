@@ -2278,10 +2278,147 @@ export async function saveSalaryStructureForEmployee(
   return itemToSave;
 }
 
+export interface MonthlyAbsenceBreakdown {
+  totalDaysInMonth: number;
+  weekendDays: number;
+  holidayDays: number;
+  approvedLeaveDays: number;
+  workingDaysExpected: number;
+  timesheetSubmittedDays: number;
+  unappliedDays: number;
+  perDaySalary: number;
+  lopDeductionAmount: number;
+  paidDays: number;
+}
+
+export function calculateMonthlyTimesheetAbsences(
+  employee: EmployeeData,
+  year: number,
+  monthIndex: number, // 0 to 11
+  grossSalary: number,
+  timesheets: TimesheetEntry[] = [],
+  leaves: LeaveRequest[] = [],
+  wfhList: WFHRequest[] = [],
+  holidays: HolidayItem[] = []
+): MonthlyAbsenceBreakdown {
+  const totalDays = new Date(year, monthIndex + 1, 0).getDate();
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonthIdx = now.getMonth();
+  const currentDay = now.getDate();
+
+  // If calculating for current month, only evaluate days up to current day
+  // For past months, evaluate all days in that month
+  const maxDayToCheck =
+    year === currentYear && monthIndex === currentMonthIdx
+      ? currentDay
+      : year < currentYear || (year === currentYear && monthIndex < currentMonthIdx)
+      ? totalDays
+      : 0;
+
+  const joiningDateStr = employee.dateOfJoining;
+  const joiningDate = joiningDateStr ? new Date(joiningDateStr) : null;
+
+  // Set of timesheet dates (formatted YYYY-MM-DD)
+  const timesheetDates = new Set<string>();
+  (timesheets || []).forEach((ts) => {
+    if (ts && ts.date) timesheetDates.add(ts.date);
+  });
+
+  // Approved leave dates
+  const isApprovedLeave = (dateStr: string) => {
+    return (leaves || []).some((l) => {
+      if (l.status !== "Approved") return false;
+      return dateStr >= l.fromDate && dateStr <= l.toDate;
+    });
+  };
+
+  // Approved WFH dates
+  const isApprovedWFH = (dateStr: string) => {
+    return (wfhList || []).some((w) => {
+      if (w.status !== "Approved") return false;
+      return dateStr >= w.fromDate && dateStr <= w.toDate;
+    });
+  };
+
+  // Holiday dates set
+  const holidayDateSet = new Set<string>();
+  (holidays || []).forEach((h) => {
+    if (h && h.date) holidayDateSet.add(h.date);
+  });
+
+  let weekendDays = 0;
+  let holidayDays = 0;
+  let approvedLeaveDays = 0;
+  let timesheetSubmittedDays = 0;
+  let unappliedDays = 0;
+
+  for (let d = 1; d <= totalDays; d++) {
+    const dStr = `${year}-${String(monthIndex + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+    const dateObj = new Date(year, monthIndex, d);
+    const dayOfWeek = dateObj.getDay(); // 0 = Sun, 6 = Sat
+
+    // 1. Check Weekend (Saturday & Sunday) -> Exempt
+    if (dayOfWeek === 0 || dayOfWeek === 6) {
+      weekendDays++;
+      continue;
+    }
+
+    // 2. Check Holiday -> Exempt
+    if (holidayDateSet.has(dStr)) {
+      holidayDays++;
+      continue;
+    }
+
+    // 3. Check Approved Leave -> Exempt
+    if (isApprovedLeave(dStr)) {
+      approvedLeaveDays++;
+      continue;
+    }
+
+    const isPastOrToday = d <= maxDayToCheck;
+    const isAfterJoining =
+      !joiningDate ||
+      isNaN(joiningDate.getTime()) ||
+      dateObj >= new Date(joiningDate.getFullYear(), joiningDate.getMonth(), joiningDate.getDate());
+
+    // 4. Check if timesheet or approved WFH was applied
+    if (timesheetDates.has(dStr) || isApprovedWFH(dStr)) {
+      timesheetSubmittedDays++;
+    } else if (isPastOrToday && isAfterJoining) {
+      // Missing timesheet day -> Loss of Pay (LOP)
+      unappliedDays++;
+    }
+  }
+
+  // 1 Day Salary = Gross Salary / Total Days in that Month
+  const perDaySalary = totalDays > 0 ? grossSalary / totalDays : 0;
+  const lopDeductionAmount = Math.round(unappliedDays * perDaySalary);
+  const paidDays = Math.max(0, totalDays - unappliedDays);
+  const workingDaysExpected = totalDays - weekendDays - holidayDays;
+
+  return {
+    totalDaysInMonth: totalDays,
+    weekendDays,
+    holidayDays,
+    approvedLeaveDays,
+    workingDaysExpected,
+    timesheetSubmittedDays,
+    unappliedDays,
+    perDaySalary,
+    lopDeductionAmount,
+    paidDays,
+  };
+}
+
 export function generateMonthlyPayslips(
   employee: EmployeeData,
   structure: EmployeeSalaryStructure,
-  year = 2026
+  year = 2026,
+  timesheets: TimesheetEntry[] = [],
+  leaves: LeaveRequest[] = [],
+  wfhList: WFHRequest[] = [],
+  holidays: HolidayItem[] = []
 ): MonthlyPayslip[] {
   const monthNames = [
     "January", "February", "March", "April", "May", "June",
@@ -2310,10 +2447,36 @@ export function generateMonthlyPayslips(
 
     if (!isAfterJoining) continue;
 
-    const daysInMonth = new Date(year, m + 1, 0).getDate();
     const monthName = monthNames[m];
     const displayMonth = `${monthName} ${year}`;
     const paymentDate = `01 ${monthName.slice(0, 3)} ${year}`;
+
+    // Calculate unapplied timesheet days
+    const absence = calculateMonthlyTimesheetAbsences(
+      employee,
+      year,
+      m,
+      structure.grossSalary,
+      timesheets,
+      leaves,
+      wfhList,
+      holidays
+    );
+
+    let deductions = [...structure.deductions];
+    if (absence.unappliedDays > 0) {
+      deductions = [
+        ...deductions,
+        {
+          id: `ded-lop-${year}-${m + 1}`,
+          name: "Leaves",
+          amount: absence.lopDeductionAmount,
+        },
+      ];
+    }
+
+    const totalDeductions = deductions.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+    const netPay = Math.max(0, structure.grossSalary - totalDeductions);
 
     payslips.push({
       id: `payslip-${empKey}-${year}-${m + 1}`,
@@ -2322,19 +2485,173 @@ export function generateMonthlyPayslips(
       year,
       monthIndex: m,
       paymentDate,
-      workingDays: daysInMonth,
-      paidDays: daysInMonth,
+      workingDays: absence.totalDaysInMonth,
+      paidDays: absence.paidDays,
       earnings: structure.earnings,
-      deductions: structure.deductions,
+      deductions,
       grossSalary: structure.grossSalary,
-      totalDeductions: structure.totalDeductions,
-      netPay: structure.netPay,
+      totalDeductions,
+      netPay,
       status: isPastOrCurrent ? "Generated" : "Processing",
     });
   }
 
-  // Sort by month descending (most recent first)
-  return payslips.sort((a, b) => b.monthIndex - a.monthIndex);
+  return payslips.sort((a, b) => b.year - a.year || b.monthIndex - a.monthIndex);
+}
+
+export const LOCAL_STORAGE_KEY_SAVED_PAYSLIPS = "gamanext_saved_payslips";
+
+export function buildPayslipForMonth(
+  employee: EmployeeData,
+  structure: EmployeeSalaryStructure,
+  year: number,
+  monthIndex: number, // 0 to 11
+  timesheets: TimesheetEntry[] = [],
+  leaves: LeaveRequest[] = [],
+  wfhList: WFHRequest[] = [],
+  holidays: HolidayItem[] = []
+): MonthlyPayslip {
+  const monthNames = [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December"
+  ];
+  const empKey = employee.id || employee.employeeId;
+  const monthName = monthNames[monthIndex];
+  const displayMonth = `${monthName} ${year}`;
+  const paymentDate = `01 ${monthName.slice(0, 3)} ${year}`;
+
+  const absence = calculateMonthlyTimesheetAbsences(
+    employee,
+    year,
+    monthIndex,
+    structure.grossSalary,
+    timesheets,
+    leaves,
+    wfhList,
+    holidays
+  );
+
+  let deductions = [...structure.deductions];
+  if (absence.unappliedDays > 0) {
+    deductions = [
+      ...deductions,
+      {
+        id: `ded-lop-${year}-${monthIndex + 1}`,
+        name: "Leaves",
+        amount: absence.lopDeductionAmount,
+      },
+    ];
+  }
+
+  const totalDeductions = deductions.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+  const netPay = Math.max(0, structure.grossSalary - totalDeductions);
+
+  return {
+    id: `payslip-${empKey}-${year}-${monthIndex + 1}`,
+    employeeId: empKey,
+    month: displayMonth,
+    year,
+    monthIndex,
+    paymentDate,
+    workingDays: absence.totalDaysInMonth,
+    paidDays: absence.paidDays,
+    earnings: structure.earnings,
+    deductions,
+    grossSalary: structure.grossSalary,
+    totalDeductions,
+    netPay,
+    status: "Generated",
+  };
+}
+
+export async function getSavedPayslipsForEmployee(
+  employeeId: string,
+  year?: number | string
+): Promise<MonthlyPayslip[]> {
+  try {
+    const q = query(
+      collection(db, "payslips"),
+      where("employeeId", "==", employeeId)
+    );
+    const snapshot = await getDocs(q);
+    const list: MonthlyPayslip[] = [];
+    snapshot.forEach((docSnap) => {
+      list.push({ id: docSnap.id, ...docSnap.data() } as MonthlyPayslip);
+    });
+    if (list.length > 0) {
+      const filtered = year && year !== "All"
+        ? list.filter((p) => String(p.year) === String(year))
+        : list;
+      return filtered.sort((a, b) => (b.year - a.year) || (b.monthIndex - a.monthIndex));
+    }
+  } catch (e) {}
+
+  if (typeof window !== "undefined") {
+    const data = localStorage.getItem(LOCAL_STORAGE_KEY_SAVED_PAYSLIPS);
+    if (data) {
+      try {
+        const list: MonthlyPayslip[] = JSON.parse(data);
+        const filtered = list.filter((p) => p.employeeId === employeeId);
+        const yearFiltered = year && year !== "All"
+          ? filtered.filter((p) => String(p.year) === String(year))
+          : filtered;
+        return yearFiltered.sort((a, b) => (b.year - a.year) || (b.monthIndex - a.monthIndex));
+      } catch (e) {}
+    }
+  }
+  return [];
+}
+
+export async function saveGeneratedPayslip(payslip: MonthlyPayslip): Promise<MonthlyPayslip> {
+  const itemToSave = {
+    ...payslip,
+  };
+
+  try {
+    if (itemToSave.id && !itemToSave.id.startsWith("payslip-")) {
+      const { id, ...data } = itemToSave;
+      await updateDoc(doc(db, "payslips", itemToSave.id), data);
+    } else {
+      const docRef = await addDoc(collection(db, "payslips"), itemToSave);
+      itemToSave.id = docRef.id;
+    }
+  } catch (e) {
+    if (!itemToSave.id) {
+      itemToSave.id = `payslip-${payslip.employeeId}-${payslip.year}-${payslip.monthIndex + 1}-${Date.now()}`;
+    }
+  }
+
+  if (typeof window !== "undefined") {
+    const existingStr = localStorage.getItem(LOCAL_STORAGE_KEY_SAVED_PAYSLIPS);
+    const existing: MonthlyPayslip[] = existingStr ? JSON.parse(existingStr) : [];
+    const updated = existing.filter(
+      (p) => !(p.employeeId === payslip.employeeId && p.year === payslip.year && p.monthIndex === payslip.monthIndex)
+    );
+    updated.unshift(itemToSave);
+    localStorage.setItem(LOCAL_STORAGE_KEY_SAVED_PAYSLIPS, JSON.stringify(updated));
+  }
+
+  return itemToSave;
+}
+
+export async function deleteSavedPayslip(id: string): Promise<boolean> {
+  try {
+    if (id && !id.startsWith("payslip-")) {
+      await deleteDoc(doc(db, "payslips", id));
+    }
+  } catch (e) {}
+
+  if (typeof window !== "undefined") {
+    const existingStr = localStorage.getItem(LOCAL_STORAGE_KEY_SAVED_PAYSLIPS);
+    if (existingStr) {
+      try {
+        const existing: MonthlyPayslip[] = JSON.parse(existingStr);
+        const filtered = existing.filter((p) => p.id !== id);
+        localStorage.setItem(LOCAL_STORAGE_KEY_SAVED_PAYSLIPS, JSON.stringify(filtered));
+      } catch (e) {}
+    }
+  }
+  return true;
 }
 
 export function amountInWords(num: number): string {

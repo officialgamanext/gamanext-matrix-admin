@@ -48,6 +48,12 @@ import {
   EmployeeSalaryStructure,
   SalaryAttribute,
   MonthlyPayslip,
+  getHolidaysFromStorage,
+  HolidayItem,
+  getSavedPayslipsForEmployee,
+  saveGeneratedPayslip,
+  deleteSavedPayslip,
+  buildPayslipForMonth,
 } from "@/lib/firebase";
 import {
   ArrowLeft,
@@ -205,6 +211,12 @@ export default function EmployeeDetailPage({
   const [salarySuccessMsg, setSalarySuccessMsg] = useState("");
   const [payslipsYear, setPayslipsYear] = useState("2026");
   const [previewPayslip, setPreviewPayslip] = useState<MonthlyPayslip | null>(null);
+  const [holidays, setHolidays] = useState<HolidayItem[]>([]);
+  const [savedPayslips, setSavedPayslips] = useState<MonthlyPayslip[]>([]);
+  const [selectedGenMonth, setSelectedGenMonth] = useState<string>("7"); // 7 = August (0-indexed)
+  const [selectedGenYear, setSelectedGenYear] = useState<string>("2026");
+  const [generatingPayslip, setGeneratingPayslip] = useState(false);
+  const [deletingPayslipId, setDeletingPayslipId] = useState<string | null>(null);
 
   // Load employee details and tab datasets
   useEffect(() => {
@@ -229,6 +241,8 @@ export default function EmployeeDetailPage({
             revData,
             bandData,
             salaryData,
+            holidaysData,
+            savedPayslipsData,
           ] = await Promise.all([
             getProjectsForEmployee(empKey),
             getLeavesForEmployee(empKey),
@@ -241,6 +255,8 @@ export default function EmployeeDetailPage({
             getYearlyReviewsForEmployee(empKey),
             getPerformanceBandsForEmployee(empKey),
             getSalaryStructureForEmployee(empKey, emp),
+            getHolidaysFromStorage(),
+            getSavedPayslipsForEmployee(empKey),
           ]);
 
           setProjects(projData);
@@ -256,6 +272,15 @@ export default function EmployeeDetailPage({
           setSalaryStructure(salaryData);
           setEarningsList(salaryData.earnings || []);
           setDeductionsList(salaryData.deductions || []);
+          setHolidays(holidaysData);
+
+          let currentSaved = savedPayslipsData;
+          if (currentSaved.length === 0 && emp) {
+            const initialAug = buildPayslipForMonth(emp, salaryData, 2026, 7, tsData, leaveData, wfhData, holidaysData);
+            const savedAug = await saveGeneratedPayslip(initialAug);
+            currentSaved = [savedAug];
+          }
+          setSavedPayslips(currentSaved);
 
           if (projData.some((p) => p.status === "Active")) {
             const activeProj = projData.find((p) => p.status === "Active");
@@ -2383,7 +2408,11 @@ export default function EmployeeDetailPage({
                   totalDeductions: currentDeductions,
                   netPay: currentNet,
                 },
-                parseInt(payslipsYear) || 2026
+                parseInt(payslipsYear) || 2026,
+                timesheets,
+                leaves,
+                wfhList,
+                holidays
               );
 
               return (
@@ -2422,10 +2451,10 @@ export default function EmployeeDetailPage({
                       </p>
                     </div>
 
-                    {/* Net Take-Home Pay Card */}
+                    {/* Net Salary to Credit Card */}
                     <div className="bg-gradient-to-br from-[#0B4FBA] to-[#003882] text-white p-4 rounded-xl shadow-xs space-y-1">
                       <div className="flex items-center justify-between text-xs text-blue-100 font-semibold">
-                        <span>Net Take-Home Pay</span>
+                        <span>Net Salary to Credit</span>
                         <div className="p-1.5 bg-white/15 rounded-lg text-white">
                           <DollarSign className="w-4 h-4" />
                         </div>
@@ -2782,37 +2811,116 @@ export default function EmployeeDetailPage({
                     </button>
                   </div>
 
-                  {/* Monthly Auto-Generated Payslips Table */}
+                  {/* Official Generated Payslips Table */}
                   <div className="bg-white rounded-xl border border-gray-200/80 shadow-2xs overflow-hidden">
-                    <div className="p-4 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-gray-50/50">
+                    <div className="p-4 border-b border-gray-100 flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-gray-50/50">
                       <div className="flex items-center space-x-2">
                         <div className="p-1.5 bg-blue-50 text-[#0B4FBA] rounded-lg">
                           <FileSpreadsheet className="w-4 h-4" />
                         </div>
                         <div>
                           <h3 className="font-bold text-xs text-gray-900">
-                            Auto-Generated Monthly Payslips ({generatedPayslips.length})
+                            Generated & Published Payslips ({savedPayslips.filter((p) => payslipsYear === "All" || String(p.year) === payslipsYear).length})
                           </h3>
                           <p className="text-[11px] text-gray-500">
-                            Auto-generated on the 1st of every month with current salary attributes
+                            Only officially generated payslips are saved and visible in the employee app
                           </p>
                         </div>
                       </div>
 
-                      {/* Year Selector */}
-                      <div className="flex items-center space-x-2 text-xs">
-                        <span className="font-semibold text-gray-600">Year:</span>
+                      {/* Controls: Generate Payslip Inline Bar */}
+                      <div className="flex flex-wrap items-center gap-2">
+                        {/* Month Selector */}
+                        <div className="w-28">
+                          <CustomDropdown
+                            options={[
+                              { value: "0", label: "January" },
+                              { value: "1", label: "February" },
+                              { value: "2", label: "March" },
+                              { value: "3", label: "April" },
+                              { value: "4", label: "May" },
+                              { value: "5", label: "June" },
+                              { value: "6", label: "July" },
+                              { value: "7", label: "August" },
+                            ]}
+                            value={selectedGenMonth}
+                            onChange={(val) => setSelectedGenMonth(val)}
+                            placeholder="Select month"
+                          />
+                        </div>
+
+                        {/* Year Selector for Generation */}
                         <div className="w-24">
                           <CustomDropdown
                             options={[
                               { value: "2026", label: "2026" },
                               { value: "2025", label: "2025" },
                             ]}
-                            value={payslipsYear}
-                            onChange={(val) => setPayslipsYear(val)}
-                            placeholder="Select year"
+                            value={selectedGenYear}
+                            onChange={(val) => setSelectedGenYear(val)}
+                            placeholder="Year"
                           />
                         </div>
+
+                        {/* Generate Button */}
+                        <button
+                          type="button"
+                          disabled={generatingPayslip}
+                          onClick={async () => {
+                            if (!employee) return;
+                            setGeneratingPayslip(true);
+                            try {
+                              const empKey = employee.id || employee.employeeId;
+                              const currentGross = earningsList.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+                              const currentDeductions = deductionsList.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+                              const currentStructure: EmployeeSalaryStructure = {
+                                id: salaryStructure?.id,
+                                employeeId: empKey,
+                                earnings: earningsList,
+                                deductions: deductionsList,
+                                grossSalary: currentGross,
+                                totalDeductions: currentDeductions,
+                                netPay: currentGross - currentDeductions,
+                              };
+
+                              const y = parseInt(selectedGenYear) || 2026;
+                              const m = parseInt(selectedGenMonth);
+
+                              const built = buildPayslipForMonth(
+                                employee,
+                                currentStructure,
+                                y,
+                                m,
+                                timesheets,
+                                leaves,
+                                wfhList,
+                                holidays
+                              );
+
+                              const saved = await saveGeneratedPayslip(built);
+                              setSavedPayslips((prev) => {
+                                const filtered = prev.filter((p) => !(p.year === y && p.monthIndex === m));
+                                return [saved, ...filtered].sort((a, b) => b.year - a.year || b.monthIndex - a.monthIndex);
+                              });
+
+                              setSalarySuccessMsg(`Payslip for ${built.month} generated and published successfully!`);
+                              setTimeout(() => setSalarySuccessMsg(""), 4000);
+                            } catch (err) {
+                              console.error("Generate payslip error:", err);
+                              alert("Failed to generate payslip.");
+                            } finally {
+                              setGeneratingPayslip(false);
+                            }
+                          }}
+                          className="px-3.5 py-1.5 bg-[#0B4FBA] hover:bg-[#003882] text-white text-xs font-semibold rounded-lg shadow-xs transition-all flex items-center space-x-1 disabled:opacity-50 cursor-pointer"
+                        >
+                          {generatingPayslip ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          ) : (
+                            <Plus className="w-3.5 h-3.5" />
+                          )}
+                          <span>Generate Payslip</span>
+                        </button>
                       </div>
                     </div>
 
@@ -2825,67 +2933,98 @@ export default function EmployeeDetailPage({
                             <th className="py-3 px-4">Paid Days</th>
                             <th className="py-3 px-4 text-right">Gross Earnings</th>
                             <th className="py-3 px-4 text-right">Deductions</th>
-                            <th className="py-3 px-4 text-right">Net Salary</th>
+                            <th className="py-3 px-4 text-right">Net Salary to Credit</th>
                             <th className="py-3 px-4 text-center">Status</th>
                             <th className="py-3 px-4 text-right">Actions</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
-                          {generatedPayslips.map((payslip) => (
-                            <tr key={payslip.id} className="hover:bg-gray-50/70 transition-colors">
-                              <td className="py-3.5 px-4 font-bold text-gray-900">
-                                <div className="flex items-center space-x-2">
-                                  <Receipt className="w-4 h-4 text-[#0B4FBA] shrink-0" />
-                                  <span>{payslip.month}</span>
-                                </div>
-                              </td>
-                              <td className="py-3.5 px-4 text-gray-600 font-mono">
-                                {payslip.paymentDate}
-                              </td>
-                              <td className="py-3.5 px-4 text-gray-700">
-                                {payslip.paidDays} / {payslip.workingDays} Days
-                              </td>
-                              <td className="py-3.5 px-4 font-semibold text-gray-900 text-right">
-                                ₹ {payslip.grossSalary.toLocaleString("en-IN")}
-                              </td>
-                              <td className="py-3.5 px-4 font-semibold text-rose-600 text-right">
-                                ₹ {payslip.totalDeductions.toLocaleString("en-IN")}
-                              </td>
-                              <td className="py-3.5 px-4 font-black text-emerald-700 text-right">
-                                ₹ {payslip.netPay.toLocaleString("en-IN")}
-                              </td>
-                              <td className="py-3.5 px-4 text-center">
-                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                                  <CheckCircle2 className="w-3 h-3 text-emerald-500" />
-                                  <span>{payslip.status}</span>
-                                </span>
-                              </td>
-                              <td className="py-3.5 px-4 text-right">
-                                <div className="flex items-center justify-end space-x-2">
-                                  <button
-                                    type="button"
-                                    onClick={() => setPreviewPayslip(payslip)}
-                                    className="px-2.5 py-1 text-xs font-semibold text-[#0B4FBA] bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-md transition-colors flex items-center space-x-1 cursor-pointer"
-                                  >
-                                    <Eye className="w-3.5 h-3.5" />
-                                    <span>View</span>
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setPreviewPayslip(payslip);
-                                      setTimeout(() => window.print(), 200);
-                                    }}
-                                    className="px-2.5 py-1 text-xs font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 border border-gray-200 rounded-md transition-colors flex items-center space-x-1 cursor-pointer"
-                                    title="Download / Print PDF"
-                                  >
-                                    <Download className="w-3.5 h-3.5 text-gray-600" />
-                                    <span>PDF</span>
-                                  </button>
-                                </div>
+                          {savedPayslips
+                            .filter((p) => payslipsYear === "All" || String(p.year) === payslipsYear)
+                            .sort((a, b) => b.year - a.year || b.monthIndex - a.monthIndex)
+                            .map((payslip) => (
+                              <tr key={payslip.id} className="hover:bg-gray-50/70 transition-colors">
+                                <td className="py-3.5 px-4 font-bold text-gray-900">
+                                  <div className="flex items-center space-x-2">
+                                    <Receipt className="w-4 h-4 text-[#0B4FBA] shrink-0" />
+                                    <span>{payslip.month}</span>
+                                  </div>
+                                </td>
+                                <td className="py-3.5 px-4 text-gray-600 font-mono">
+                                  {payslip.paymentDate}
+                                </td>
+                                <td className="py-3.5 px-4 text-gray-700">
+                                  {payslip.paidDays} / {payslip.workingDays} Days
+                                </td>
+                                <td className="py-3.5 px-4 font-semibold text-gray-900 text-right">
+                                  ₹ {payslip.grossSalary.toLocaleString("en-IN")}
+                                </td>
+                                <td className="py-3.5 px-4 font-semibold text-gray-900 text-right">
+                                  ₹ {payslip.totalDeductions.toLocaleString("en-IN")}
+                                </td>
+                                <td className="py-3.5 px-4 font-black text-emerald-700 text-right">
+                                  ₹ {payslip.netPay.toLocaleString("en-IN")}
+                                </td>
+                                <td className="py-3.5 px-4 text-center">
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                    <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+                                    <span>{payslip.status}</span>
+                                  </span>
+                                </td>
+                                <td className="py-3.5 px-4 text-right">
+                                  <div className="flex items-center justify-end space-x-1.5">
+                                    <button
+                                      type="button"
+                                      onClick={() => setPreviewPayslip(payslip)}
+                                      className="px-2 py-1 text-xs font-semibold text-[#0B4FBA] bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-md transition-colors flex items-center space-x-1 cursor-pointer"
+                                      title="View Payslip"
+                                    >
+                                      <Eye className="w-3.5 h-3.5" />
+                                      <span>View</span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setPreviewPayslip(payslip);
+                                        setTimeout(() => window.print(), 200);
+                                      }}
+                                      className="px-2 py-1 text-xs font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 border border-gray-200 rounded-md transition-colors flex items-center space-x-1 cursor-pointer"
+                                      title="Download / Print PDF"
+                                    >
+                                      <Download className="w-3.5 h-3.5 text-gray-600" />
+                                      <span>PDF</span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      disabled={deletingPayslipId === payslip.id}
+                                      onClick={async () => {
+                                        if (!confirm(`Are you sure you want to delete the generated payslip for ${payslip.month}?`)) return;
+                                        setDeletingPayslipId(payslip.id);
+                                        try {
+                                          await deleteSavedPayslip(payslip.id);
+                                          setSavedPayslips((prev) => prev.filter((p) => p.id !== payslip.id));
+                                        } catch (err) {
+                                          console.error("Delete error:", err);
+                                        } finally {
+                                          setDeletingPayslipId(null);
+                                        }
+                                      }}
+                                      className="p-1 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-colors cursor-pointer"
+                                      title="Delete payslip"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            ))}
+                          {savedPayslips.length === 0 && (
+                            <tr>
+                              <td colSpan={8} className="py-8 text-center text-xs text-gray-400">
+                                No payslips generated yet. Click &quot;Generate Payslip&quot; above to create and publish one.
                               </td>
                             </tr>
-                          ))}
+                          )}
                         </tbody>
                       </table>
                     </div>
@@ -2927,19 +3066,18 @@ export default function EmployeeDetailPage({
               <div className="p-8 space-y-6 bg-white text-gray-900 relative" id="printable-payslip">
                 {/* 1. Company Header */}
                 <div className="flex items-start justify-between border-b-2 border-[#0B4FBA] pb-4">
-                  <div className="space-y-1">
-                    <div className="flex items-center space-x-2">
-                      <span className="text-xl font-black text-[#0B4FBA] tracking-wider">GAMANEXT</span>
-                      <span className="text-xs font-bold bg-[#0B4FBA]/10 text-[#0B4FBA] px-2 py-0.5 rounded">
-                        MATRIX
-                      </span>
+                  <div className="space-y-1.5">
+                    {/* Company Logo */}
+                    <div>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src="/gama-next-logo-reserved.png"
+                        alt="GAMANEXT"
+                        className="h-11 w-auto object-contain"
+                      />
                     </div>
-                    <p className="text-xs font-bold text-gray-800 uppercase tracking-tight">
-                      Gamanext Technologies Private Limited
-                    </p>
-                    <p className="text-[11px] text-gray-500 leading-tight">
-                      Matrix Tower, IT Park, HITEC City, Hyderabad - 500081<br />
-                      Email: hr@gamanext.com • Web: https://gamanext.com
+                    <p className="text-[11px] text-gray-700 font-medium">
+                      <span className="font-semibold text-gray-900">Branch:</span> Gamaone &nbsp;|&nbsp; <span className="font-semibold text-gray-900">GSTIN:</span> 36AAGCG7123A1Z8
                     </p>
                   </div>
 
@@ -2974,6 +3112,10 @@ export default function EmployeeDetailPage({
                     <div className="flex">
                       <span className="w-28 font-semibold text-gray-500">Department:</span>
                       <span className="text-gray-800">{employee.department || "Technology"}</span>
+                    </div>
+                    <div className="flex">
+                      <span className="w-28 font-semibold text-gray-500">Branch:</span>
+                      <span className="font-bold text-gray-900">Gamaone</span>
                     </div>
                     <div className="flex">
                       <span className="w-28 font-semibold text-gray-500">Date of Joining:</span>
@@ -3018,13 +3160,13 @@ export default function EmployeeDetailPage({
                         {previewPayslip.earnings.map((e) => (
                           <div key={e.id} className="p-2.5 flex justify-between text-gray-700">
                             <span>{e.name}</span>
-                            <span className="font-mono font-semibold">₹ {Number(e.amount).toLocaleString("en-IN")}</span>
+                            <span className="font-mono font-semibold text-gray-900">₹ {Number(e.amount).toLocaleString("en-IN")}</span>
                           </div>
                         ))}
                       </div>
                     </div>
 
-                    {/* Right: Deductions Column */}
+                    {/* Right: Deductions Column (Black text only) */}
                     <div>
                       <div className="bg-gray-100 p-2.5 font-bold text-gray-800 border-b border-gray-200 flex justify-between">
                         <span>Deductions</span>
@@ -3034,7 +3176,7 @@ export default function EmployeeDetailPage({
                         {previewPayslip.deductions.map((d) => (
                           <div key={d.id} className="p-2.5 flex justify-between text-gray-700">
                             <span>{d.name}</span>
-                            <span className="font-mono font-semibold text-rose-600">₹ {Number(d.amount).toLocaleString("en-IN")}</span>
+                            <span className="font-mono font-semibold text-gray-900">₹ {Number(d.amount).toLocaleString("en-IN")}</span>
                           </div>
                         ))}
                       </div>
@@ -3047,7 +3189,7 @@ export default function EmployeeDetailPage({
                       <span>Total Gross Earnings</span>
                       <span className="font-mono">₹ {previewPayslip.grossSalary.toLocaleString("en-IN")}</span>
                     </div>
-                    <div className="flex justify-between text-rose-700">
+                    <div className="flex justify-between text-gray-900">
                       <span>Total Deductions</span>
                       <span className="font-mono">- ₹ {previewPayslip.totalDeductions.toLocaleString("en-IN")}</span>
                     </div>
@@ -3057,7 +3199,7 @@ export default function EmployeeDetailPage({
                 {/* 4. Net Salary & Amount in Words Card */}
                 <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-4 rounded-xl border border-blue-200 space-y-1.5">
                   <div className="flex items-center justify-between text-xs">
-                    <span className="font-bold text-blue-900 uppercase tracking-wide">Net Salary Payable:</span>
+                    <span className="font-bold text-blue-900 uppercase tracking-wide">Net Salary to Credit:</span>
                     <span className="text-xl font-black text-[#0B4FBA] font-mono">
                       ₹ {previewPayslip.netPay.toLocaleString("en-IN")}
                     </span>
@@ -3067,26 +3209,9 @@ export default function EmployeeDetailPage({
                   </div>
                 </div>
 
-                {/* 5. Footer & Signatures */}
-                <div className="pt-8 grid grid-cols-2 gap-8 text-xs border-t border-gray-200 text-center">
-                  <div className="space-y-8">
-                    <div className="h-8"></div>
-                    <div className="border-t border-gray-300 pt-1 text-gray-600 font-medium">
-                      Employee Signature
-                    </div>
-                  </div>
-                  <div className="space-y-8">
-                    <div className="h-8 flex items-center justify-center font-bold text-[#0B4FBA]">
-                      Gamanext HR / Payroll Dept.
-                    </div>
-                    <div className="border-t border-gray-300 pt-1 text-gray-600 font-medium">
-                      Authorized Signatory
-                    </div>
-                  </div>
-                </div>
-
-                <div className="text-[10px] text-gray-400 text-center pt-2">
-                  This is a system-generated electronic payslip issued by Gamanext Technologies Pvt. Ltd. and requires no physical stamp.
+                {/* 5. Clean Footer Note (Signatures removed per request) */}
+                <div className="text-[10px] text-gray-400 text-center pt-4 border-t border-gray-100">
+                  This is a system-generated electronic payslip issued by Gamanext Technologies Pvt. Ltd. and requires no signature.
                 </div>
               </div>
             </div>
