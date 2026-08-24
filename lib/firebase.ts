@@ -138,6 +138,17 @@ export interface EmployeeRequest {
   createdAt?: string;
 }
 
+export interface HolidayItem {
+  id?: string;
+  title: string;
+  date: string; // YYYY-MM-DD
+  dayOfWeek?: string; // e.g. "Monday"
+  type: "National Holiday" | "Public Holiday" | "Festival Holiday" | "Company Holiday" | "Optional / Restricted";
+  description?: string;
+  year?: number | string;
+  createdAt?: string;
+}
+
 export interface YearlyReview {
   id?: string;
   employeeId: string;
@@ -1915,6 +1926,137 @@ export async function deleteCustomerInvoiceFromStorage(id: string): Promise<bool
     const existing = await getCustomerInvoicesFromStorage();
     const filtered = existing.filter((inv) => inv.id !== id);
     localStorage.setItem(LOCAL_STORAGE_KEY_CUSTOMER_INVOICES, JSON.stringify(filtered));
+  }
+  return true;
+}
+
+/* ---------------- HOLIDAYS STORAGE ---------------- */
+export const LOCAL_STORAGE_KEY_HOLIDAYS = "gamanext_holidays";
+
+export const DEFAULT_HOLIDAYS_2026: Omit<HolidayItem, "id">[] = [
+  { title: "New Year's Day", date: "2026-01-01", dayOfWeek: "Thursday", type: "Public Holiday", description: "First day of the new year", year: 2026 },
+  { title: "Makar Sankranti / Pongal", date: "2026-01-14", dayOfWeek: "Wednesday", type: "Festival Holiday", description: "Harvest Festival", year: 2026 },
+  { title: "Republic Day", date: "2026-01-26", dayOfWeek: "Monday", type: "National Holiday", description: "Commemorates the adoption of Constitution of India", year: 2026 },
+  { title: "Maha Shivaratri", date: "2026-02-15", dayOfWeek: "Sunday", type: "Festival Holiday", description: "Great Night of Lord Shiva", year: 2026 },
+  { title: "Holi", date: "2026-03-04", dayOfWeek: "Wednesday", type: "Festival Holiday", description: "Festival of Colours", year: 2026 },
+  { title: "Ugadi / Gudi Padwa", date: "2026-03-19", dayOfWeek: "Thursday", type: "Festival Holiday", description: "Traditional New Year Festival", year: 2026 },
+  { title: "Eid-ul-Fitr (Ramzan)", date: "2026-03-21", dayOfWeek: "Saturday", type: "Festival Holiday", description: "Islamic celebration marking the end of Ramadan", year: 2026 },
+  { title: "Good Friday", date: "2026-04-03", dayOfWeek: "Friday", type: "Public Holiday", description: "Christian holiday commemorating the crucifixion", year: 2026 },
+  { title: "Dr. B.R. Ambedkar Jayanti", date: "2026-04-14", dayOfWeek: "Tuesday", type: "Public Holiday", description: "Birth anniversary of Dr. B.R. Ambedkar", year: 2026 },
+  { title: "May Day / Labour Day", date: "2026-05-01", dayOfWeek: "Friday", type: "Public Holiday", description: "International Workers' Day", year: 2026 },
+  { title: "Bakrid / Eid al-Adha", date: "2026-05-27", dayOfWeek: "Wednesday", type: "Festival Holiday", description: "Feast of the Sacrifice", year: 2026 },
+  { title: "Independence Day", date: "2026-08-15", dayOfWeek: "Saturday", type: "National Holiday", description: "Indian Independence Day celebration", year: 2026 },
+  { title: "Ganesh Chaturthi", date: "2026-09-14", dayOfWeek: "Monday", type: "Festival Holiday", description: "Celebrates the birth of Lord Ganesha", year: 2026 },
+  { title: "Gandhi Jayanti", date: "2026-10-02", dayOfWeek: "Friday", type: "National Holiday", description: "Birth anniversary of Mahatma Gandhi", year: 2026 },
+  { title: "Dussehra / Vijaya Dashami", date: "2026-10-20", dayOfWeek: "Tuesday", type: "Festival Holiday", description: "Victory of good over evil", year: 2026 },
+  { title: "Diwali / Deepavali", date: "2026-11-08", dayOfWeek: "Sunday", type: "Festival Holiday", description: "Festival of Lights", year: 2026 },
+  { title: "Christmas Day", date: "2026-12-25", dayOfWeek: "Friday", type: "Public Holiday", description: "Celebration of the birth of Jesus Christ", year: 2026 },
+];
+
+export async function getHolidaysFromStorage(filterYear?: string | number): Promise<HolidayItem[]> {
+  try {
+    const q = query(collection(db, "holidays"), orderBy("date", "asc"));
+    const snapshot = await getDocs(q);
+    const holidays: HolidayItem[] = [];
+    snapshot.forEach((docSnap) => {
+      holidays.push({ id: docSnap.id, ...docSnap.data() } as HolidayItem);
+    });
+    if (holidays.length > 0) {
+      if (filterYear && filterYear !== "All") {
+        return holidays.filter((h) => String(h.year || new Date(h.date).getFullYear()) === String(filterYear));
+      }
+      return holidays;
+    }
+  } catch (e) {}
+
+  if (typeof window !== "undefined") {
+    const data = localStorage.getItem(LOCAL_STORAGE_KEY_HOLIDAYS);
+    if (data) {
+      try {
+        const parsed: HolidayItem[] = JSON.parse(data);
+        if (parsed.length > 0) {
+          if (filterYear && filterYear !== "All") {
+            return parsed.filter((h) => String(h.year || new Date(h.date).getFullYear()) === String(filterYear));
+          }
+          return parsed;
+        }
+      } catch (e) {}
+    }
+
+    // Seed default holidays if empty
+    const seeded: HolidayItem[] = DEFAULT_HOLIDAYS_2026.map((h, i) => ({
+      ...h,
+      id: `hol-${Date.now()}-${i}`,
+      createdAt: new Date().toISOString(),
+    }));
+    localStorage.setItem(LOCAL_STORAGE_KEY_HOLIDAYS, JSON.stringify(seeded));
+    if (filterYear && filterYear !== "All") {
+      return seeded.filter((h) => String(h.year || new Date(h.date).getFullYear()) === String(filterYear));
+    }
+    return seeded;
+  }
+  return [];
+}
+
+export async function saveHolidayToStorage(
+  holiday: Omit<HolidayItem, "id" | "createdAt"> & { id?: string }
+): Promise<HolidayItem> {
+  const dateObj = new Date(holiday.date);
+  const dayOfWeek = isNaN(dateObj.getTime())
+    ? ""
+    : dateObj.toLocaleDateString("en-US", { weekday: "long" });
+  const year = isNaN(dateObj.getTime()) ? 2026 : dateObj.getFullYear();
+
+  const itemToSave: HolidayItem = {
+    ...holiday,
+    dayOfWeek: holiday.dayOfWeek || dayOfWeek,
+    year: holiday.year || year,
+    createdAt: holiday.id ? undefined : new Date().toISOString(),
+  };
+
+  const isEdit = Boolean(itemToSave.id && !itemToSave.id.startsWith("hol-"));
+
+  try {
+    if (isEdit && itemToSave.id) {
+      const docId = itemToSave.id;
+      const { id, ...data } = itemToSave;
+      await updateDoc(doc(db, "holidays", docId), data);
+    } else {
+      const docRef = await addDoc(collection(db, "holidays"), itemToSave);
+      itemToSave.id = docRef.id;
+    }
+  } catch (e) {
+    if (!itemToSave.id) {
+      itemToSave.id = `hol-${Date.now()}`;
+    }
+  }
+
+  if (typeof window !== "undefined") {
+    const existing = await getHolidaysFromStorage();
+    let updatedList: HolidayItem[];
+    if (itemToSave.id && existing.some((h) => h.id === itemToSave.id)) {
+      updatedList = existing.map((h) => (h.id === itemToSave.id ? { ...h, ...itemToSave } : h));
+    } else {
+      updatedList = [itemToSave, ...existing];
+    }
+    updatedList.sort((a, b) => (a.date > b.date ? 1 : -1));
+    localStorage.setItem(LOCAL_STORAGE_KEY_HOLIDAYS, JSON.stringify(updatedList));
+  }
+
+  return itemToSave;
+}
+
+export async function deleteHolidayFromStorage(id: string): Promise<boolean> {
+  try {
+    if (id && !id.startsWith("hol-")) {
+      await deleteDoc(doc(db, "holidays", id));
+    }
+  } catch (e) {}
+
+  if (typeof window !== "undefined") {
+    const existing = await getHolidaysFromStorage();
+    const filtered = existing.filter((h) => h.id !== id);
+    localStorage.setItem(LOCAL_STORAGE_KEY_HOLIDAYS, JSON.stringify(filtered));
   }
   return true;
 }

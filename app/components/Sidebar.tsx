@@ -8,9 +8,10 @@ import {
   Receipt,
   Briefcase,
   FolderKanban,
+  Building2,
+  Calendar,
   Target,
   FileText,
-  Building2,
   Settings,
   ChevronRight,
   Sparkles,
@@ -45,6 +46,11 @@ export default function Sidebar() {
       name: "Projects",
       href: "/projects",
       icon: FolderKanban,
+    },
+    {
+      name: "Holidays",
+      href: "/holidays",
+      icon: Calendar,
     },
     {
       name: "Departments & Roles",
