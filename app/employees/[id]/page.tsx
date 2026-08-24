@@ -11,6 +11,9 @@ import {
   updateEmployeeInStorage,
   getProjectsForEmployee,
   saveProjectForEmployee,
+  setActiveProjectForEmployee,
+  setProjectAllocationStatus,
+  deleteProjectAllocation,
   getLeavesForEmployee,
   saveLeaveForEmployee,
   updateLeaveStatusInStorage,
@@ -67,6 +70,10 @@ import {
   Award,
   TrendingUp,
   Sparkles,
+  Power,
+  PowerOff,
+  Trash2,
+  Info,
 } from "lucide-react";
 
 // Helper to determine fiscal quarter based on month (1-indexed)
@@ -114,7 +121,10 @@ export default function EmployeeDetailPage({
   const [newProjectStartDate, setNewProjectStartDate] = useState(
     new Date().toISOString().split("T")[0]
   );
+  const [newProjectStatus, setNewProjectStatus] = useState<"Active" | "Inactive">("Active");
   const [addingProject, setAddingProject] = useState(false);
+  const [togglingProjectId, setTogglingProjectId] = useState<string | null>(null);
+  const [deletingProjectId, setDeletingProjectId] = useState<string | null>(null);
 
   // Tab 3: Leaves
   const [leaves, setLeaves] = useState<LeaveRequest[]>([]);
@@ -213,7 +223,10 @@ export default function EmployeeDetailPage({
           setReviews(revData);
           setBands(bandData);
 
-          if (mProjects.length > 0) {
+          if (projData.some((p) => p.status === "Active")) {
+            const activeProj = projData.find((p) => p.status === "Active");
+            if (activeProj) setTsProject(activeProj.projectName);
+          } else if (mProjects.length > 0) {
             setNewProjectName(mProjects[0].name);
             setTsProject(mProjects[0].name);
           } else if (projData.length > 0) {
@@ -260,15 +273,69 @@ export default function EmployeeDetailPage({
         projectName: newProjectName.trim(),
         role: newProjectRole || employee.employeeRole,
         startDate: newProjectStartDate,
-        status: "Active",
+        status: newProjectStatus,
       });
-      setProjects((prev) => [created, ...prev]);
+
+      setProjects((prev) => {
+        if (newProjectStatus === "Active") {
+          return [created, ...prev.map((p) => ({ ...p, status: "Inactive" as const }))];
+        }
+        return [created, ...prev];
+      });
+
       setNewProjectRole("");
-      if (!tsProject) setTsProject(created.projectName);
+      if (newProjectStatus === "Active") {
+        setTsProject(created.projectName);
+      }
     } catch (err) {
       console.error("Assign project error:", err);
     } finally {
       setAddingProject(false);
+    }
+  };
+
+  // Toggle Project Active/Inactive (Enable / Disable) Status Handler
+  const handleToggleProjectStatus = async (projId: string, currentStatus: string) => {
+    if (!employee || !projId) return;
+    const nextStatus: "Active" | "Inactive" = currentStatus === "Active" ? "Inactive" : "Active";
+    setTogglingProjectId(projId);
+    try {
+      const empKey = employee.id || employee.employeeId;
+      await setProjectAllocationStatus(empKey, projId, nextStatus);
+      setProjects((prev) =>
+        prev.map((p) => {
+          if (p.id === projId) {
+            return { ...p, status: nextStatus };
+          }
+          if (nextStatus === "Active") {
+            // Guarantee only one is active: all other projects become Inactive
+            return { ...p, status: "Inactive" as const };
+          }
+          return p;
+        })
+      );
+      if (nextStatus === "Active") {
+        const target = projects.find((p) => p.id === projId);
+        if (target) setTsProject(target.projectName);
+      }
+    } catch (err) {
+      console.error("Toggle project status error:", err);
+    } finally {
+      setTogglingProjectId(null);
+    }
+  };
+
+  // Delete Project Allocation Handler
+  const handleDeleteProject = async (projId: string) => {
+    if (!confirm("Are you sure you want to remove this project allocation?")) return;
+    setDeletingProjectId(projId);
+    try {
+      await deleteProjectAllocation(projId);
+      setProjects((prev) => prev.filter((p) => p.id !== projId));
+    } catch (err) {
+      console.error("Delete project allocation error:", err);
+    } finally {
+      setDeletingProjectId(null);
     }
   };
 
@@ -987,10 +1054,21 @@ export default function EmployeeDetailPage({
         {/* TAB 2: PROJECT ALLOCATION */}
         {activeTab === "projects" && (
           <div className="space-y-4">
+            {/* Policy Banner */}
+            <div className="bg-blue-50/80 border border-blue-200/80 rounded-xl p-3.5 flex items-start space-x-3 text-xs text-blue-900">
+              <Info className="w-4 h-4 text-[#0B4FBA] shrink-0 mt-0.5" />
+              <div className="space-y-0.5">
+                <p className="font-bold text-[#0B4FBA]">Single Active Project Policy</p>
+                <p className="text-gray-600 leading-relaxed">
+                  Only <strong>one project allocation</strong> can be active at a time for this employee. Enabling a project as Active will automatically set all other assigned projects to Inactive. You can enable or disable any project using the toggles or action buttons below.
+                </p>
+              </div>
+            </div>
+
             {/* Assign Project Form */}
             <form
               onSubmit={handleAssignProject}
-              className="bg-white p-5 rounded-xl border border-gray-200/80 shadow-2xs space-y-3"
+              className="bg-white p-5 rounded-xl border border-gray-200/80 shadow-2xs space-y-4"
             >
               <div className="flex items-center justify-between border-b border-gray-100 pb-2">
                 <div className="flex items-center space-x-2">
@@ -1006,9 +1084,9 @@ export default function EmployeeDetailPage({
                 </Link>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs">
                 <div>
-                  <label className="block font-semibold text-gray-700 mb-1">Select Project</label>
+                  <label className="block font-semibold text-gray-700 mb-1">Select Project *</label>
                   <CustomDropdown
                     options={projectDropdownOptions}
                     value={newProjectName}
@@ -1025,7 +1103,7 @@ export default function EmployeeDetailPage({
                     value={newProjectRole}
                     onChange={(e) => setNewProjectRole(e.target.value)}
                     placeholder={`e.g. ${employee.employeeRole}`}
-                    className="w-full px-3 py-1.5 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-[#0B4FBA]/30 bg-white"
+                    className="w-full px-3 py-1.5 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-[#0B4FBA]/30 bg-white h-[38px] text-xs"
                   />
                 </div>
 
@@ -1037,13 +1115,36 @@ export default function EmployeeDetailPage({
                     placeholder="Select start date"
                   />
                 </div>
+
+                <div>
+                  <label className="block font-semibold text-gray-700 mb-1">Initial Status</label>
+                  <CustomDropdown
+                    options={[
+                      { value: "Active", label: "Active (Current Working)" },
+                      { value: "Inactive", label: "Inactive (Disabled / Standby)" },
+                    ]}
+                    value={newProjectStatus}
+                    onChange={(val) => setNewProjectStatus(val as "Active" | "Inactive")}
+                    placeholder="Select status"
+                  />
+                </div>
               </div>
 
-              <div className="flex justify-end pt-1">
+              <div className="flex items-center justify-between pt-1 border-t border-gray-100/60">
+                <div className="text-[11px] text-gray-500">
+                  {newProjectStatus === "Active" ? (
+                    <span className="text-emerald-700 font-medium flex items-center space-x-1.5">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block"></span>
+                      <span>Assigning as <strong>Active</strong> will automatically mark existing projects as Inactive</span>
+                    </span>
+                  ) : (
+                    <span className="text-gray-500">Assigning as Inactive (can be enabled at any time)</span>
+                  )}
+                </div>
                 <button
                   type="submit"
                   disabled={addingProject || !newProjectName.trim()}
-                  className="px-4 py-1.5 bg-[#0B4FBA] hover:bg-[#003882] text-white text-xs font-semibold rounded-lg shadow-xs transition-all flex items-center space-x-1.5 disabled:opacity-50"
+                  className="px-4 py-2 bg-[#0B4FBA] hover:bg-[#003882] text-white text-xs font-semibold rounded-lg shadow-xs transition-all flex items-center space-x-1.5 disabled:opacity-50 cursor-pointer"
                 >
                   {addingProject ? (
                     <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -1057,8 +1158,29 @@ export default function EmployeeDetailPage({
 
             {/* Assignment History Table */}
             <div className="bg-white rounded-xl border border-gray-200/80 shadow-2xs overflow-hidden">
-              <div className="p-3 border-b border-gray-100 font-bold text-xs text-gray-800 bg-gray-50/50">
-                Project Assignment History ({projects.length})
+              <div className="p-3.5 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
+                <div className="font-bold text-xs text-gray-800 flex items-center space-x-2">
+                  <span>Project Assignment History</span>
+                  <span className="bg-gray-200 text-gray-700 px-2 py-0.5 rounded-full text-[10px] font-bold">
+                    {projects.length}
+                  </span>
+                </div>
+                {projects.some((p) => p.status === "Active") ? (
+                  <div className="text-[11px] font-medium text-emerald-700 flex items-center space-x-1.5 bg-emerald-50 px-2.5 py-1 rounded-md border border-emerald-200/70">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                    <span>
+                      Current Active:{" "}
+                      <strong>
+                        {projects.find((p) => p.status === "Active")?.projectName}
+                      </strong>
+                    </span>
+                  </div>
+                ) : (
+                  <div className="text-[11px] font-medium text-amber-700 flex items-center space-x-1.5 bg-amber-50 px-2.5 py-1 rounded-md border border-amber-200/70">
+                    <AlertCircle className="w-3.5 h-3.5 text-amber-600" />
+                    <span>No active project currently assigned</span>
+                  </div>
+                )}
               </div>
 
               {projects.length === 0 ? (
@@ -1074,24 +1196,144 @@ export default function EmployeeDetailPage({
                         <th className="py-3 px-4">Role</th>
                         <th className="py-3 px-4">Start Date</th>
                         <th className="py-3 px-4">Status</th>
+                        <th className="py-3 px-4 text-center">Enable / Disable</th>
+                        <th className="py-3 px-4 text-right">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
-                      {projects.map((proj, idx) => (
-                        <tr key={proj.id || idx} className="hover:bg-gray-50/70 transition-colors">
-                          <td className="py-3 px-4 font-bold text-gray-900 flex items-center space-x-2">
-                            <FolderKanban className="w-4 h-4 text-[#0B4FBA]" />
-                            <span>{proj.projectName}</span>
-                          </td>
-                          <td className="py-3 px-4 text-gray-700">{proj.role}</td>
-                          <td className="py-3 px-4 text-gray-600">{proj.startDate}</td>
-                          <td className="py-3 px-4">
-                            <span className="bg-emerald-50 text-emerald-700 font-semibold px-2 py-0.5 rounded border border-emerald-200 text-[10px]">
-                              {proj.status}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
+                      {projects.map((proj, idx) => {
+                        const isActive = proj.status === "Active";
+                        const isToggling = togglingProjectId === proj.id;
+                        const isDeleting = deletingProjectId === proj.id;
+
+                        return (
+                          <tr
+                            key={proj.id || idx}
+                            className={`hover:bg-gray-50/70 transition-colors ${
+                              isActive ? "bg-blue-50/30" : ""
+                            }`}
+                          >
+                            <td className="py-3 px-4 font-bold text-gray-900">
+                              <div className="flex items-center space-x-2">
+                                <FolderKanban
+                                  className={`w-4 h-4 shrink-0 ${
+                                    isActive ? "text-[#0B4FBA]" : "text-gray-400"
+                                  }`}
+                                />
+                                <div>
+                                  <span className="block text-gray-900">{proj.projectName}</span>
+                                  {isActive && (
+                                    <span className="text-[10px] text-emerald-600 font-semibold block">
+                                      Active Working Project
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </td>
+                            <td className="py-3 px-4 text-gray-700">{proj.role || "—"}</td>
+                            <td className="py-3 px-4 text-gray-600 font-mono">{proj.startDate || "—"}</td>
+                            <td className="py-3 px-4">
+                              <span
+                                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold ${
+                                  isActive
+                                    ? "bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs"
+                                    : "bg-gray-100 text-gray-600 border border-gray-200"
+                                }`}
+                              >
+                                <span
+                                  className={`w-1.5 h-1.5 rounded-full ${
+                                    isActive ? "bg-emerald-500 animate-pulse" : "bg-gray-400"
+                                  }`}
+                                ></span>
+                                <span>{isActive ? "Active" : "Inactive"}</span>
+                              </span>
+                            </td>
+                            <td className="py-3 px-4 text-center">
+                              <div className="flex items-center justify-center space-x-2">
+                                <button
+                                  type="button"
+                                  role="switch"
+                                  aria-checked={isActive}
+                                  disabled={isToggling || !proj.id}
+                                  onClick={() => handleToggleProjectStatus(proj.id!, proj.status)}
+                                  className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden disabled:opacity-50 ${
+                                    isActive ? "bg-emerald-600" : "bg-gray-300 hover:bg-gray-400"
+                                  }`}
+                                  title={
+                                    isActive
+                                      ? "Click to Disable (Set Inactive)"
+                                      : "Click to Enable (Set Active and disable other projects)"
+                                  }
+                                >
+                                  <span
+                                    className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
+                                      isActive ? "translate-x-4" : "translate-x-0"
+                                    }`}
+                                  />
+                                </button>
+                                <span
+                                  className={`text-[11px] font-semibold ${
+                                    isActive ? "text-emerald-700" : "text-gray-500"
+                                  }`}
+                                >
+                                  {isActive ? "Enabled" : "Disabled"}
+                                </span>
+                              </div>
+                            </td>
+                            <td className="py-3 px-4 text-right">
+                              <div className="flex items-center justify-end space-x-2">
+                                {isActive ? (
+                                  <button
+                                    type="button"
+                                    disabled={isToggling || !proj.id}
+                                    onClick={() => handleToggleProjectStatus(proj.id!, proj.status)}
+                                    className="px-2.5 py-1 text-[11px] font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-md transition-colors flex items-center space-x-1 disabled:opacity-50 cursor-pointer"
+                                    title="Disable this project allocation"
+                                  >
+                                    {isToggling ? (
+                                      <Loader2 className="w-3 h-3 animate-spin text-rose-600" />
+                                    ) : (
+                                      <PowerOff className="w-3 h-3 text-rose-600" />
+                                    )}
+                                    <span>Disable</span>
+                                  </button>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    disabled={isToggling || !proj.id}
+                                    onClick={() => handleToggleProjectStatus(proj.id!, proj.status)}
+                                    className="px-2.5 py-1 text-[11px] font-semibold text-[#0B4FBA] bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-md transition-colors flex items-center space-x-1 disabled:opacity-50 cursor-pointer"
+                                    title="Enable this project and deactivate all others"
+                                  >
+                                    {isToggling ? (
+                                      <Loader2 className="w-3 h-3 animate-spin text-[#0B4FBA]" />
+                                    ) : (
+                                      <Power className="w-3 h-3 text-[#0B4FBA]" />
+                                    )}
+                                    <span>Enable (Active)</span>
+                                  </button>
+                                )}
+
+                                {proj.id && (
+                                  <button
+                                    type="button"
+                                    disabled={isDeleting}
+                                    onClick={() => handleDeleteProject(proj.id!)}
+                                    className="p-1 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-colors disabled:opacity-50 cursor-pointer"
+                                    title="Delete allocation"
+                                  >
+                                    {isDeleting ? (
+                                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                    ) : (
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    )}
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>

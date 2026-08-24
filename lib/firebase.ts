@@ -90,7 +90,7 @@ export interface ProjectAllocation {
   role: string;
   startDate: string;
   endDate?: string;
-  status: "Active" | "Completed";
+  status: "Active" | "Inactive" | "Completed";
   createdAt?: string;
 }
 
@@ -499,8 +499,35 @@ export async function getProjectsForEmployee(employeeId: string): Promise<Projec
 export async function saveProjectForEmployee(project: ProjectAllocation): Promise<ProjectAllocation> {
   const item: ProjectAllocation = {
     ...project,
+    status: project.status || "Active",
     createdAt: new Date().toISOString(),
   };
+
+  // If newly added project is Active, mark all other existing projects for this employee as Inactive
+  if (item.status === "Active") {
+    try {
+      const existingProjects = await getProjectsForEmployee(project.employeeId);
+      for (const p of existingProjects) {
+        if (p.id && p.status === "Active") {
+          const docRef = doc(db, "project_allocations", p.id);
+          await updateDoc(docRef, { status: "Inactive" });
+        }
+      }
+    } catch (e) {}
+
+    if (typeof window !== "undefined") {
+      const existingStr = localStorage.getItem(LOCAL_STORAGE_KEY_PROJECTS);
+      if (existingStr) {
+        const allProjects: ProjectAllocation[] = JSON.parse(existingStr);
+        const updated = allProjects.map((p) =>
+          p.employeeId === project.employeeId && p.status === "Active"
+            ? { ...p, status: "Inactive" as const }
+            : p
+        );
+        localStorage.setItem(LOCAL_STORAGE_KEY_PROJECTS, JSON.stringify(updated));
+      }
+    }
+  }
 
   try {
     const docRef = await addDoc(collection(db, "project_allocations"), item);
@@ -520,6 +547,71 @@ export async function saveProjectForEmployee(project: ProjectAllocation): Promis
     }
     return created;
   }
+}
+
+export async function setProjectAllocationStatus(
+  employeeId: string,
+  targetProjectId: string,
+  newStatus: "Active" | "Inactive"
+): Promise<boolean> {
+  try {
+    const existingProjects = await getProjectsForEmployee(employeeId);
+    for (const p of existingProjects) {
+      if (p.id) {
+        if (p.id === targetProjectId) {
+          const docRef = doc(db, "project_allocations", p.id);
+          await updateDoc(docRef, { status: newStatus });
+        } else if (newStatus === "Active" && p.status === "Active") {
+          // If enabling target project, disable all other active projects to guarantee only 1 is active
+          const docRef = doc(db, "project_allocations", p.id);
+          await updateDoc(docRef, { status: "Inactive" });
+        }
+      }
+    }
+  } catch (e) {}
+
+  if (typeof window !== "undefined") {
+    const existingStr = localStorage.getItem(LOCAL_STORAGE_KEY_PROJECTS);
+    if (existingStr) {
+      const allProjects: ProjectAllocation[] = JSON.parse(existingStr);
+      const updated = allProjects.map((p) => {
+        if (p.employeeId === employeeId) {
+          if (p.id === targetProjectId) {
+            return { ...p, status: newStatus };
+          }
+          if (newStatus === "Active" && p.status === "Active") {
+            return { ...p, status: "Inactive" as const };
+          }
+        }
+        return p;
+      });
+      localStorage.setItem(LOCAL_STORAGE_KEY_PROJECTS, JSON.stringify(updated));
+    }
+  }
+  return true;
+}
+
+export async function setActiveProjectForEmployee(
+  employeeId: string,
+  targetProjectId: string
+): Promise<boolean> {
+  return setProjectAllocationStatus(employeeId, targetProjectId, "Active");
+}
+
+export async function deleteProjectAllocation(id: string): Promise<boolean> {
+  try {
+    await deleteDoc(doc(db, "project_allocations", id));
+  } catch (e) {}
+
+  if (typeof window !== "undefined") {
+    const existingStr = localStorage.getItem(LOCAL_STORAGE_KEY_PROJECTS);
+    if (existingStr) {
+      const allProjects: ProjectAllocation[] = JSON.parse(existingStr);
+      const updated = allProjects.filter((p) => p.id !== id);
+      localStorage.setItem(LOCAL_STORAGE_KEY_PROJECTS, JSON.stringify(updated));
+    }
+  }
+  return true;
 }
 
 /* ---------------- LEAVES STORAGE ---------------- */
