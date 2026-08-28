@@ -8,7 +8,7 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-poppins);
+  --font-sans: var(--font-sora);
 }
 
 *,
@@ -33,7 +33,7 @@ label,
 table,
 td,
 th {
-  font-family: var(--font-poppins), 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+  font-family: var(--font-sora), 'Sora', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
 }
 
 /* Enforce maximum font-weight of 500 across the entire application */
@@ -43,9 +43,12 @@ b, strong,
 .font-bold,
 .font-extrabold,
 .font-black,
+.font-medium,
 [class*="font-semibold"],
 [class*="font-bold"],
-[class*="font-black"] {
+[class*="font-black"],
+[class*="font-medium"],
+th {
   font-weight: 500 !important;
 }
 

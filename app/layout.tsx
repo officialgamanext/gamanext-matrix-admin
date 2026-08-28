@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
-import { Poppins } from "next/font/google";
+import { Sora } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/lib/authContext";
 import AuthGuard from "./components/AuthGuard";
 
-const poppins = Poppins({
-  variable: "--font-poppins",
+const sora = Sora({
+  variable: "--font-sora",
   subsets: ["latin"],
   weight: ["300", "400", "500"],
   display: "swap",
@@ -24,9 +24,9 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${poppins.variable} h-full antialiased`}
+      className={`${sora.variable} h-full antialiased`}
     >
-      <body className={`${poppins.className} min-h-full flex flex-col bg-[#f1f2f4]`}>
+      <body className={`${sora.className} min-h-full flex flex-col bg-[#f1f2f4]`}>
         <AuthProvider>
           <AuthGuard>{children}</AuthGuard>
         </AuthProvider>
