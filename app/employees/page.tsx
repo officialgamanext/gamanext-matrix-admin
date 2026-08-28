@@ -21,6 +21,7 @@ import {
   Eye,
   Building2,
   ChevronRight,
+  Lock,
 } from "lucide-react";
 
 export default function EmployeesPage() {
@@ -234,13 +235,23 @@ export default function EmployeesPage() {
 
                         {/* ID & Role */}
                         <td className="py-3 px-4">
-                          <div className="flex items-center space-x-1.5">
+                          <div className="flex items-center flex-wrap gap-1.5">
                             <span className="font-mono text-xs font-semibold text-[#0B4FBA] bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
                               {emp.employeeId}
                             </span>
-                            <span className="text-[10px] font-semibold bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded border border-emerald-200">
+                            <span className="text-[10px] font-semibold bg-gray-100 text-gray-700 px-1.5 py-0.5 rounded border border-gray-200">
                               {emp.jobType || "Full-Time"}
                             </span>
+                            {emp.isLocked ? (
+                              <span className="text-[10px] font-bold bg-red-50 text-red-700 px-1.5 py-0.5 rounded border border-red-200 flex items-center space-x-0.5">
+                                <Lock className="w-2.5 h-2.5" />
+                                <span>Locked</span>
+                              </span>
+                            ) : (
+                              <span className="text-[10px] font-semibold bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded border border-emerald-200">
+                                Active
+                              </span>
+                            )}
                           </div>
                           <div className="text-gray-700 font-medium mt-1">{emp.employeeRole}</div>
                         </td>

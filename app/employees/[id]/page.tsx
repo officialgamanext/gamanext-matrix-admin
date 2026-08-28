@@ -74,6 +74,8 @@ import {
   Loader2,
   Save,
   Lock,
+  Unlock,
+  ShieldAlert,
   FolderKanban,
   Send,
   CheckCheck,
@@ -135,6 +137,8 @@ export default function EmployeeDetailPage({
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [editFormData, setEditFormData] = useState<Partial<EmployeeData>>({});
   const [savingProfile, setSavingProfile] = useState(false);
+  const [togglingLock, setTogglingLock] = useState(false);
+  const [lockNotice, setLockNotice] = useState<string | null>(null);
 
   // Tab 2: Projects
   const [projects, setProjects] = useState<ProjectAllocation[]>([]);
@@ -320,6 +324,45 @@ export default function EmployeeDetailPage({
       alert("Failed to update profile.");
     } finally {
       setSavingProfile(false);
+    }
+  };
+
+  // Toggle Lock / Block Account Handler
+  const handleToggleLockAccount = async (targetLockedState?: boolean) => {
+    if (!employee) return;
+    const empKey = employee.id || employee.employeeId;
+    const currentLocked = !!employee.isLocked;
+    const nextLocked = targetLockedState !== undefined ? targetLockedState : !currentLocked;
+
+    const confirmMessage = nextLocked
+      ? `Are you sure you want to LOCK & BLOCK ${employee.firstName}'s account?\n\n• The employee will be immediately logged out of GamaNext Matrix App.\n• All access to login, timesheets, requests, and profile in the employee app will be blocked until unlocked.`
+      : `Are you sure you want to UNLOCK ${employee.firstName}'s account?\n\n• The employee will be restored to active status and will be able to log in to the GamaNext Matrix App again.`;
+
+    if (!window.confirm(confirmMessage)) {
+      return;
+    }
+
+    setTogglingLock(true);
+    try {
+      const updatePayload: Partial<EmployeeData> = {
+        isLocked: nextLocked,
+        lockedAt: nextLocked ? new Date().toISOString() : "",
+      };
+
+      await updateEmployeeInStorage(empKey, updatePayload);
+      setEmployee((prev) => (prev ? { ...prev, ...updatePayload } : null));
+      setEditFormData((prev) => ({ ...prev, ...updatePayload }));
+
+      const notice = nextLocked
+        ? `Account successfully locked. Employee app access is blocked and active sessions are revoked.`
+        : `Account successfully unlocked. Employee access has been restored.`;
+      setLockNotice(notice);
+      setTimeout(() => setLockNotice(null), 6000);
+    } catch (err) {
+      console.error("Error toggling account lock:", err);
+      alert("Failed to update account lock status. Please try again.");
+    } finally {
+      setTogglingLock(false);
     }
   };
 
@@ -717,9 +760,19 @@ export default function EmployeeDetailPage({
                 <span className="font-mono text-xs font-bold text-[#0B4FBA] bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
                   {employee.employeeId}
                 </span>
-                <span className="text-[11px] font-semibold bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded border border-emerald-200">
+                <span className="text-[11px] font-semibold bg-gray-100 text-gray-700 px-2 py-0.5 rounded border border-gray-200">
                   {employee.jobType || "Full-Time"}
                 </span>
+                {employee.isLocked ? (
+                  <span className="text-[11px] font-bold bg-red-50 text-red-700 px-2 py-0.5 rounded border border-red-200 flex items-center space-x-1">
+                    <Lock className="w-3 h-3" />
+                    <span>Account Locked</span>
+                  </span>
+                ) : (
+                  <span className="text-[11px] font-semibold bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded border border-emerald-200">
+                    Active Account
+                  </span>
+                )}
               </div>
               <div className="text-xs text-gray-500 mt-1 flex flex-wrap items-center gap-3">
                 <span>
@@ -737,16 +790,111 @@ export default function EmployeeDetailPage({
             </div>
           </div>
 
-          <div className="flex items-center space-x-2">
+          <div className="flex flex-wrap items-center gap-3">
+            {/* Lock Account Toggle Widget */}
+            <div
+              className={`flex items-center space-x-3 px-3.5 py-1.5 rounded-xl border transition-all ${
+                employee.isLocked
+                  ? "bg-red-50/80 border-red-200 shadow-2xs"
+                  : "bg-slate-50 border-slate-200/80"
+              }`}
+            >
+              <div className="flex items-center space-x-1.5">
+                {employee.isLocked ? (
+                  <Lock className="w-4 h-4 text-red-600 animate-pulse shrink-0" />
+                ) : (
+                  <Unlock className="w-4 h-4 text-slate-500 shrink-0" />
+                )}
+                <div className="flex flex-col">
+                  <span className="text-[10px] uppercase font-bold text-gray-400 leading-none">
+                    Account Lock
+                  </span>
+                  <span
+                    className={`text-xs font-bold leading-tight ${
+                      employee.isLocked ? "text-red-700" : "text-gray-700"
+                    }`}
+                  >
+                    {employee.isLocked ? "Locked (Blocked)" : "Unlocked"}
+                  </span>
+                </div>
+              </div>
+
+              <div className="pl-2 border-l border-gray-200/80 flex items-center">
+                <button
+                  type="button"
+                  onClick={() => handleToggleLockAccount()}
+                  disabled={togglingLock}
+                  title={
+                    employee.isLocked
+                      ? "Click to unlock this account"
+                      : "Click to lock and block this account"
+                  }
+                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none disabled:opacity-50 ${
+                    employee.isLocked ? "bg-red-600" : "bg-gray-300"
+                  }`}
+                >
+                  <span
+                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                      employee.isLocked ? "translate-x-5" : "translate-x-0"
+                    }`}
+                  />
+                </button>
+              </div>
+            </div>
+
             <button
               onClick={() => setIsEditingProfile(!isEditingProfile)}
-              className="px-3.5 py-1.5 bg-blue-50 text-[#0B4FBA] border border-blue-200 hover:bg-blue-100 text-xs font-semibold rounded-lg transition-all flex items-center space-x-1.5 shadow-2xs"
+              className="px-3.5 py-2 bg-blue-50 text-[#0B4FBA] border border-blue-200 hover:bg-blue-100 text-xs font-semibold rounded-xl transition-all flex items-center space-x-1.5 shadow-2xs cursor-pointer"
             >
               <Edit3 className="w-3.5 h-3.5" />
               <span>{isEditingProfile ? "Cancel Edit" : "Edit Profile"}</span>
             </button>
           </div>
         </div>
+
+        {/* Lock Notification Toast */}
+        {lockNotice && (
+          <div className="bg-blue-50 border border-blue-200 p-3.5 rounded-xl text-xs font-semibold text-blue-900 flex items-center justify-between shadow-2xs animate-in fade-in">
+            <div className="flex items-center space-x-2">
+              <CheckCircle2 className="w-4 h-4 text-[#0B4FBA] shrink-0" />
+              <span>{lockNotice}</span>
+            </div>
+            <button
+              onClick={() => setLockNotice(null)}
+              className="text-gray-400 hover:text-gray-700"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
+        {/* Persistent Account Blocked Warning Banner */}
+        {employee.isLocked && (
+          <div className="bg-red-50/90 border border-red-200 p-4 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs animate-in fade-in">
+            <div className="flex items-start space-x-3">
+              <div className="w-9 h-9 rounded-lg bg-red-100 text-red-600 flex items-center justify-center shrink-0 mt-0.5">
+                <ShieldAlert className="w-5 h-5" />
+              </div>
+              <div className="space-y-0.5">
+                <div className="text-xs font-bold text-red-900 flex items-center space-x-1.5">
+                  <span>Account is Locked & App Access is Blocked</span>
+                </div>
+                <div className="text-[11px] text-red-700 leading-relaxed">
+                  This employee cannot sign in to the GamaNext Matrix App. Any active sessions on mobile or web have been revoked and logged out.
+                </div>
+              </div>
+            </div>
+
+            <button
+              onClick={() => handleToggleLockAccount(false)}
+              disabled={togglingLock}
+              className="px-3.5 py-1.5 bg-white border border-red-300 hover:bg-red-50 text-red-700 text-xs font-bold rounded-lg shadow-2xs transition-all flex items-center justify-center space-x-1.5 shrink-0 disabled:opacity-50"
+            >
+              <Unlock className="w-3.5 h-3.5" />
+              <span>Unlock Account</span>
+            </button>
+          </div>
+        )}
 
         {/* Tab Bar */}
         <div className="bg-white rounded-xl border border-gray-200/80 p-1.5 flex items-center space-x-1 overflow-x-auto shadow-2xs">
@@ -982,11 +1130,95 @@ export default function EmployeeDetailPage({
                       className="w-full px-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0B4FBA]/30 outline-none uppercase font-mono"
                     />
                   </div>
+
+                  {/* Account Security & Lock Status Edit */}
+                  <div className="sm:col-span-2 md:col-span-4 border-t border-gray-100 pt-3">
+                    <div className={`p-4 rounded-xl border flex items-center justify-between transition-all ${editFormData.isLocked ? "bg-red-50/80 border-red-200" : "bg-gray-50 border-gray-200"}`}>
+                      <div>
+                        <div className="text-xs font-bold text-gray-900 flex items-center space-x-1.5">
+                          <Lock className={`w-4 h-4 ${editFormData.isLocked ? "text-red-600" : "text-gray-600"}`} />
+                          <span>Lock Employee Account (Block App Access)</span>
+                        </div>
+                        <p className="text-[11px] text-gray-500 mt-0.5 max-w-xl">
+                          When locked, this employee cannot log into GamaNext Matrix App and all active sessions are instantly terminated.
+                        </p>
+                      </div>
+                      <label className="relative inline-flex items-center cursor-pointer select-none shrink-0">
+                        <input
+                          type="checkbox"
+                          checked={!!editFormData.isLocked}
+                          onChange={(e) =>
+                            setEditFormData({ ...editFormData, isLocked: e.target.checked })
+                          }
+                          className="sr-only peer"
+                        />
+                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-red-600"></div>
+                      </label>
+                    </div>
+                  </div>
                 </div>
               </div>
             ) : (
               /* VIEW PROFILE CARD */
               <div className="space-y-4 text-xs text-gray-700">
+                {/* Account Security & App Access Card */}
+                <div className={`bg-white p-5 rounded-xl border shadow-2xs space-y-3 ${employee.isLocked ? "border-red-200" : "border-gray-200/80"}`}>
+                  <div className="flex items-center justify-between border-b border-gray-100 pb-2.5">
+                    <div className="flex items-center space-x-2">
+                      <Lock className={`w-4 h-4 ${employee.isLocked ? "text-red-600" : "text-[#0B4FBA]"}`} />
+                      <h2 className="text-sm font-bold text-gray-900">Account Security & Access Permission</h2>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      {employee.isLocked ? (
+                        <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-red-100 text-red-700 border border-red-200 flex items-center space-x-1">
+                          <Lock className="w-3 h-3" />
+                          <span>Access Blocked</span>
+                        </span>
+                      ) : (
+                        <span className="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                          Active & Permitted
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-xl bg-gray-50/70 border border-gray-200/60">
+                    <div className="space-y-1">
+                      <div className="text-xs font-bold text-gray-900">
+                        {employee.isLocked ? "Account is currently Locked" : "Account is Unlocked (Active)"}
+                      </div>
+                      <p className="text-[11px] text-gray-600 max-w-xl leading-relaxed">
+                        {employee.isLocked
+                          ? "This employee is prevented from logging in to GamaNext Matrix App. Any current active sessions on web or mobile devices have been immediately revoked."
+                          : "This employee has full authorized access to log in and use the GamaNext Matrix App."}
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => handleToggleLockAccount()}
+                      disabled={togglingLock}
+                      className={`px-4 py-2 text-xs font-bold rounded-xl transition-all shadow-2xs flex items-center justify-center space-x-1.5 shrink-0 cursor-pointer disabled:opacity-50 ${
+                        employee.isLocked
+                          ? "bg-emerald-600 hover:bg-emerald-700 text-white"
+                          : "bg-red-50 hover:bg-red-100 text-red-700 border border-red-200"
+                      }`}
+                    >
+                      {employee.isLocked ? (
+                        <>
+                          <Unlock className="w-3.5 h-3.5" />
+                          <span>Unlock & Restore Access</span>
+                        </>
+                      ) : (
+                        <>
+                          <Lock className="w-3.5 h-3.5" />
+                          <span>Lock Account (Block Access)</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+
                 {/* Personal & Contact Grid */}
                 <div className="bg-white p-5 rounded-xl border border-gray-200/80 shadow-2xs space-y-3">
                   <div className="flex items-center space-x-2 border-b border-gray-100 pb-2.5">
