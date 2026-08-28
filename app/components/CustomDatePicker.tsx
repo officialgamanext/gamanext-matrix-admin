@@ -66,6 +66,11 @@ export default function CustomDatePicker({
   ];
   const dayHeaders = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
 
+  // Generous Year options (1950 - 2060)
+  const startYear = 1950;
+  const endYear = 2060;
+  const yearOptions = Array.from({ length: endYear - startYear + 1 }, (_, i) => startYear + i);
+
   // Generate calendar days
   const firstDayOfMonth = new Date(currentYear, currentMonth, 1).getDay();
   const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
@@ -144,23 +149,52 @@ export default function CustomDatePicker({
 
       {/* Calendar Popover */}
       {isOpen && (
-        <div className="absolute left-0 top-full mt-1 bg-white border border-gray-200 rounded-xl shadow-xl z-50 p-3 w-64 select-none animate-in fade-in slide-in-from-top-1 duration-150">
-          {/* Calendar Month Header */}
-          <div className="flex items-center justify-between pb-2 mb-2 border-b border-gray-100">
+        <div className="absolute left-0 top-full mt-1 bg-white border border-gray-200 rounded-xl shadow-xl z-50 p-3 w-72 select-none animate-in fade-in slide-in-from-top-1 duration-150">
+          {/* Calendar Month & Year Header with Quick Dropdown Selectors */}
+          <div className="flex items-center justify-between gap-1 pb-2 mb-2 border-b border-gray-100">
             <button
               type="button"
               onClick={handlePrevMonth}
-              className="p-1 hover:bg-gray-100 rounded-lg text-gray-600 transition-colors"
+              title="Previous Month"
+              className="p-1 hover:bg-gray-100 rounded-md text-gray-600 transition-colors shrink-0 cursor-pointer"
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
-            <div className="font-bold text-xs text-gray-900">
-              {monthNames[currentMonth]} {currentYear}
+
+            {/* Quick Month & Year Dropdowns */}
+            <div className="flex items-center gap-1.5 flex-1 justify-center">
+              <select
+                value={currentMonth}
+                onChange={(e) => setViewDate(new Date(currentYear, parseInt(e.target.value), 1))}
+                aria-label="Select month"
+                className="text-xs font-semibold text-gray-800 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-md px-1.5 py-1 focus:outline-none focus:ring-1 focus:ring-[#0B4FBA] cursor-pointer"
+              >
+                {monthNames.map((name, idx) => (
+                  <option key={idx} value={idx}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+
+              <select
+                value={currentYear}
+                onChange={(e) => setViewDate(new Date(parseInt(e.target.value), currentMonth, 1))}
+                aria-label="Select year"
+                className="text-xs font-semibold text-gray-800 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-md px-1.5 py-1 focus:outline-none focus:ring-1 focus:ring-[#0B4FBA] cursor-pointer"
+              >
+                {yearOptions.map((yr) => (
+                  <option key={yr} value={yr}>
+                    {yr}
+                  </option>
+                ))}
+              </select>
             </div>
+
             <button
               type="button"
               onClick={handleNextMonth}
-              className="p-1 hover:bg-gray-100 rounded-lg text-gray-600 transition-colors"
+              title="Next Month"
+              className="p-1 hover:bg-gray-100 rounded-md text-gray-600 transition-colors shrink-0 cursor-pointer"
             >
               <ChevronRight className="w-4 h-4" />
             </button>
