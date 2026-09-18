@@ -3,12 +3,11 @@
 import { useEffect, useState, useId } from "react";
 import AdminLayout from "../components/AdminLayout";
 import {
-  getWhatsAppContacts,
-  saveWhatsAppContact,
-  updateWhatsAppContact,
-  deleteWhatsAppContact,
+  getClientContacts,
+  saveClientContact,
+  updateClientContact,
+  deleteClientContact,
   saveWhatsAppMessage,
-  getCustomersFromStorage,
   WhatsAppContact,
   WhatsAppMessage,
 } from "@/lib/firebase";
@@ -124,16 +123,15 @@ export default function ClientContactsPage() {
     setTimeout(() => setToastMessage(null), 4000);
   };
 
-  // Load Contacts
+  // Load Contacts: loads strictly separately added client contacts
   const loadContacts = async () => {
     setLoading(true);
     try {
-      const data = await getWhatsAppContacts();
-      const unique = Array.from(new Map(data.map((c) => [c.phone || c.id, c])).values());
-      setContacts(unique);
+      const data = await getClientContacts();
+      setContacts(data);
     } catch (err) {
-      console.error("Error loading contacts:", err);
-      showToast("Could not load contacts from Firestore", "error");
+      console.error("Error loading client contacts:", err);
+      showToast("Could not load client contacts", "error");
     } finally {
       setLoading(false);
     }
@@ -190,42 +188,13 @@ export default function ClientContactsPage() {
   const handleDelete = async (contact: WhatsAppContact) => {
     if (!contact.id) return;
     try {
-      await deleteWhatsAppContact(contact.id);
+      await deleteClientContact(contact.id);
       setContacts((prev) => prev.filter((c) => c.id !== contact.id));
       setSelectedContactIds((prev) => prev.filter((id) => id !== contact.id));
-      showToast(`Contact "${contact.name}" removed`);
+      showToast(`Client contact "${contact.name}" removed`);
       setDeletingContact(null);
     } catch (err) {
       showToast("Failed to delete contact", "error");
-    }
-  };
-
-  // Import from existing Customers
-  const handleQuickImportCustomers = async () => {
-    try {
-      const customers = await getCustomersFromStorage();
-      if (!customers || customers.length === 0) {
-        showToast("No customers found to import", "error");
-        return;
-      }
-      let addedCount = 0;
-      for (const cust of customers) {
-        if (!cust.mobileNumber) continue;
-        const norm = normalizeE164(cust.mobileNumber);
-        const exists = contacts.some((c) => c.phone === norm);
-        if (!exists) {
-          await saveWhatsAppContact({
-            name: cust.name || cust.businessName || "Customer",
-            phone: norm,
-            notes: cust.businessName ? `Business: ${cust.businessName}` : "",
-          });
-          addedCount++;
-        }
-      }
-      await loadContacts();
-      showToast(`Successfully imported ${addedCount} customer(s) into Client Contacts!`);
-    } catch (err) {
-      showToast("Error importing customers", "error");
     }
   };
 
@@ -277,27 +246,17 @@ export default function ClientContactsPage() {
             </div>
           </div>
 
-          {/* Header Actions - Exactly h-[38px] and rounded-[6px] */}
+          {/* Header Actions - Exactly h-[34px] and rounded-[6px] */}
           <div className="flex flex-wrap items-center gap-2">
-            {/* Quick import from customers */}
-            <button
-              onClick={handleQuickImportCustomers}
-              title="Import all phone numbers from your existing Customers list"
-              className="h-[38px] px-3.5 text-xs font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-[6px] transition flex items-center space-x-1.5 border border-gray-200"
-            >
-              <RefreshCw className="w-3.5 h-3.5" />
-              <span>Sync from Customers</span>
-            </button>
-
             {/* Bulk Send Button */}
             <button
               onClick={() => setIsBulkSendOpen(true)}
-              className="h-[38px] px-4 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-[6px] text-xs font-semibold shadow-2xs transition flex items-center space-x-2"
+              className="h-[34px] px-4 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-[6px] text-xs font-medium shadow-2xs transition flex items-center space-x-2"
             >
               <Send className="w-3.5 h-3.5" />
               <span>Bulk Send</span>
               {selectedContactIds.length > 0 && (
-                <span className="px-1.5 py-0.2 rounded-[6px] bg-white/25 text-[11px] font-bold">
+                <span className="px-1.5 py-0.2 rounded-[6px] bg-white/25 text-[11px] font-medium">
                   {selectedContactIds.length}
                 </span>
               )}
@@ -306,7 +265,7 @@ export default function ClientContactsPage() {
             {/* Add Contact Button */}
             <button
               onClick={handleOpenAdd}
-              className="h-[38px] px-4 bg-[#0B4FBA] hover:bg-[#003882] text-white rounded-[6px] text-xs font-semibold shadow-2xs transition flex items-center space-x-1.5"
+              className="h-[34px] px-4 bg-[#0B4FBA] hover:bg-[#003882] text-white rounded-[6px] text-xs font-medium shadow-2xs transition flex items-center space-x-1.5"
             >
               <Plus className="w-3.5 h-3.5" />
               <span>Add Contact</span>
@@ -412,22 +371,16 @@ export default function ClientContactsPage() {
                 <p className="text-xs text-gray-500">
                   {searchQuery
                     ? "No contacts matched your search query. Try typing something else."
-                    : "Get started by adding your first client contact or importing from existing customers."}
+                    : "Get started by adding your first client contact."}
                 </p>
               </div>
               <div className="flex items-center justify-center gap-2 pt-2">
                 <button
                   onClick={handleOpenAdd}
-                  className="h-[38px] px-4 bg-[#0B4FBA] hover:bg-[#003882] text-white rounded-[6px] text-xs font-semibold transition flex items-center space-x-1.5"
+                  className="h-[34px] px-4 bg-[#0B4FBA] hover:bg-[#003882] text-white rounded-[6px] text-xs font-medium transition flex items-center space-x-1.5"
                 >
                   <Plus className="w-3.5 h-3.5" />
                   <span>Add First Contact</span>
-                </button>
-                <button
-                  onClick={handleQuickImportCustomers}
-                  className="h-[38px] px-4 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-[6px] text-xs font-semibold transition flex items-center"
-                >
-                  Import from Customers
                 </button>
               </div>
             </div>
@@ -728,7 +681,7 @@ function AddEditContactModal({
 
     try {
       if (existingContact?.id) {
-        await updateWhatsAppContact(existingContact.id, {
+        await updateClientContact(existingContact.id, {
           name: name.trim(),
           phone: fullPhone,
           notes: notes.trim(),
@@ -740,7 +693,7 @@ function AddEditContactModal({
           notes: notes.trim(),
         });
       } else {
-        const created = await saveWhatsAppContact({
+        const created = await saveClientContact({
           name: name.trim(),
           phone: fullPhone,
           notes: notes.trim(),
@@ -887,7 +840,7 @@ function AddEditContactModal({
   );
 }
 
-/* ─────────────── SUB-COMPONENT: SEND WHATSAPP MESSAGE MODAL (SINGLE) ─────────────── */
+/* ─────────────── SUB-COMPONENT: SEND WHATSAPP TEMPLATE MODAL (SINGLE) ─────────────── */
 function SendMessageModal({
   contact,
   onClose,
@@ -897,79 +850,71 @@ function SendMessageModal({
   onClose: () => void;
   onSent: () => void;
 }) {
-  const [customMessage, setCustomMessage] = useState(
-    "we missed your call. Please let us know if you're available to connect."
-  );
-  const [websiteUrl, setWebsiteUrl] = useState("https://www.gamanext.com");
-  const [sendMode, setSendMode] = useState<"gamanext_message" | "message_to_customers_template">("gamanext_message");
+  const [selectedTemplate, setSelectedTemplate] = useState("3p_direct_integration_test_template");
+  const [customTemplateName, setCustomTemplateName] = useState("");
+  const [isCustom, setIsCustom] = useState(false);
+  const [languageCode, setLanguageCode] = useState("en_US");
+  const [customMessage, setCustomMessage] = useState("");
   const [sending, setSending] = useState(false);
-  const [apiResult, setApiResult] = useState<{ success: boolean; text: string; details?: string } | null>(null);
+  const [apiResult, setApiResult] = useState<{ success: boolean; text: string } | null>(null);
 
-  const singleMessageInputId = useId();
-  const websiteInputId = useId();
+  const activeTemplateName = isCustom ? customTemplateName.trim() : selectedTemplate;
 
-  // Quick suggestions
-  const suggestions = [
-    {
-      label: "Missed Call / Connect",
-      text: "we missed your call. Please let us know if you're available to connect.",
-    },
-    {
-      label: "Welcome Note",
-      text: "welcome to GamaNext! We are delighted to serve you. Please let us know if you need any assistance.",
-    },
-    {
-      label: "Payment Reminder",
-      text: "gentle reminder regarding your pending invoice from GamaNext. Please feel free to reach out if you have any questions.",
-    },
-  ];
-
-  // Dynamic merged client message: "Hi {contact.name}, {customMessage}"
-  const mergedBody = `Hi ${contact.name}, ${customMessage.trim()}`;
+  // Pre-configured preview descriptions
+  const getPreviewText = () => {
+    if (activeTemplateName === "3p_direct_integration_test_template") {
+      return `Integration Test\n\nWelcome! This is a test message from the WhatsApp Business Platform. You have successfully configured your WhatsApp Business account and completed onboarding. You can now start sending messages to your customers.\n\nWhatsApp Business Platform`;
+    }
+    if (activeTemplateName === "message_to_customers") {
+      return `Missed call\n\nHi ${contact.name}, we missed your call. Please let us know if you're available to reschedule.\n\n[ Reschedule Call ]`;
+    }
+    if (activeTemplateName === "customer_update_notification") {
+      return `Hello ${contact.name}, please note the following update regarding our services: ${customMessage.trim() || "[Type your custom message in the box below]"}. Thank you for your cooperation and support.`;
+    }
+    if (customMessage.trim()) {
+      return `Hi ${contact.name}, ${customMessage.trim()}`;
+    }
+    return `Hello ${contact.name}, [Template: ${activeTemplateName || "custom"}]`;
+  };
 
   const handleSend = async () => {
-    if (!customMessage.trim() && sendMode === "gamanext_message") {
-      setApiResult({ success: false, text: "Please enter a message to send." });
+    if (!activeTemplateName) {
+      setApiResult({ success: false, text: "Please enter or select a template name." });
       return;
     }
 
     setSending(true);
     setApiResult(null);
 
-    // Formatted text with GamaNext header, merged client name, and View Website
-    const formattedText = `*GamaNext™*\n\n${mergedBody}\n\n🌐 *View Website:* ${websiteUrl}\n_WhatsApp Business Platform · GamaNext™_`;
-
     try {
-      const payload =
-        sendMode === "message_to_customers_template"
-          ? {
-              to: contact.phone,
-              type: "template",
-              templateName: "message_to_customers",
-              languageCode: "en_US",
-            }
-          : {
-              to: contact.phone,
-              type: "text",
-              message: formattedText,
-            };
-
       const res = await fetch("/api/whatsapp/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          to: contact.phone,
+          phone: contact.phone,
+          name: contact.name,
+          type: "template",
+          templateName: activeTemplateName,
+          languageCode: languageCode || "en_US",
+          variables:
+            activeTemplateName === "customer_update_notification"
+              ? [contact.name, customMessage.trim() || ""]
+              : undefined,
+        }),
       });
 
       const data = await res.json();
 
       if (data.success) {
-        // Record outbound message in Firestore
         await saveWhatsAppMessage({
           phone: contact.phone,
           contactName: contact.name,
           direction: "outbound",
-          type: sendMode === "message_to_customers_template" ? "template" : "text",
-          message: sendMode === "message_to_customers_template" ? "Template: message_to_customers (GamaNext™)" : formattedText,
+          type: "template",
+          message: customMessage.trim()
+            ? `Template: ${activeTemplateName} | Hi ${contact.name}, ${customMessage.trim()}`
+            : `Template: ${activeTemplateName} (Sent to ${contact.name})`,
           status: "sent",
           waMessageId: data.waMessageId || undefined,
           timestamp: new Date().toISOString(),
@@ -977,17 +922,20 @@ function SendMessageModal({
 
         setApiResult({
           success: true,
-          text: `Message successfully delivered to WhatsApp! (ID: ${data.waMessageId || "OK"})`,
+          text: `Template "${activeTemplateName}" sent successfully!`,
         });
 
         setTimeout(() => {
           onSent();
         }, 1200);
       } else {
+        const errorMsg =
+          typeof data.error === "object"
+            ? data.error?.message || JSON.stringify(data.error)
+            : data.error || "Failed to send template message.";
         setApiResult({
           success: false,
-          text: data.error || "Meta WhatsApp Cloud API rejected the request.",
-          details: data.details?.error?.message || data.details?.error?.error_user_msg || "",
+          text: errorMsg,
         });
       }
     } catch (err: unknown) {
@@ -1001,31 +949,22 @@ function SendMessageModal({
     }
   };
 
-  // Direct WhatsApp Link (fallback for 24-hr session window or manual send)
-  const directWhatsAppUrl = `https://wa.me/${cleanPhone(contact.phone)}?text=${encodeURIComponent(
-    `*GamaNext™*\n\n${mergedBody}\n\n🌐 View Website: ${websiteUrl}`
-  )}`;
-
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 overflow-y-auto">
-      <div className="bg-white rounded-[6px] max-w-xl w-full overflow-hidden shadow-2xl border border-gray-200 my-6 animate-in zoom-in-95">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-[6px] max-w-md w-full overflow-hidden shadow-2xl border border-gray-200 animate-in zoom-in-95">
         {/* Header */}
         <div className="bg-gradient-to-r from-emerald-700 via-emerald-600 to-teal-700 p-4 text-white flex items-center justify-between">
           <div className="flex items-center space-x-2.5">
             <div className="w-8 h-8 rounded-[6px] bg-white/20 flex items-center justify-center">
-              <svg
-                viewBox="0 0 24 24"
-                className="w-5 h-5 fill-current text-white"
-                xmlns="http://www.w3.org/2000/svg"
-              >
+              <svg viewBox="0 0 24 24" className="w-4 h-4 fill-current text-white" xmlns="http://www.w3.org/2000/svg">
                 <path d="M17.472 14.382c-.301-.15-1.78-.877-2.056-.977-.275-.101-.476-.15-.676.15-.201.3-.777.978-.952 1.178-.176.2-.351.226-.652.075-.3-.15-1.267-.467-2.414-1.488-.893-.796-1.496-1.78-1.671-2.08-.176-.3-.019-.463.132-.613.135-.135.301-.351.451-.527.151-.175.201-.3.302-.501.1-.2.05-.376-.025-.526-.075-.15-.677-1.631-.928-2.235-.244-.588-.493-.509-.677-.518l-.577-.01c-.2 0-.527.075-.802.375-.276.3-1.053 1.029-1.053 2.508s1.078 2.906 1.229 3.107c.15.2 2.121 3.24 5.138 4.542.718.31 1.278.496 1.715.635.722.23 1.378.197 1.898.12.579-.088 1.78-.727 2.03-1.429.251-.702.251-1.303.176-1.429-.075-.125-.276-.201-.577-.351z" />
                 <path d="M12 0C5.373 0 0 5.373 0 12c0 2.115.548 4.101 1.508 5.835L.234 23.243a.75.75 0 00.923.923l5.408-1.274A11.947 11.947 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22a9.946 9.946 0 01-5.074-1.391l-.364-.216-3.774.889.889-3.774-.216-.364A9.948 9.948 0 012 12c0-5.514 4.486-10 10-10s10 4.486 10 10-4.486 10-10 10z" />
               </svg>
             </div>
             <div>
-              <h2 className="font-bold text-base">Send WhatsApp Message</h2>
+              <h2 className="font-medium text-sm">Send WhatsApp Template</h2>
               <p className="text-[11px] text-emerald-100">
-                To: <span className="font-semibold text-white">{contact.name}</span> ({contact.phone})
+                To: <span className="font-medium text-white">{contact.name}</span> ({contact.phone})
               </p>
             </div>
           </div>
@@ -1034,252 +973,149 @@ function SendMessageModal({
           </button>
         </div>
 
-        {/* Modal Body */}
-        <div className="p-5 space-y-4">
-          {/* Template Badge bar */}
-          <div className="bg-gray-50 border border-gray-200 rounded-[6px] p-2.5 flex flex-wrap items-center justify-between gap-2 text-xs">
-            <div className="flex items-center space-x-2">
-              <span className="font-bold text-gray-800">message_to_customers · English (US)</span>
-              <span className="px-1.5 py-0.5 rounded-[6px] text-[10px] font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">
-                Active · Quality pending
-              </span>
-            </div>
-            <div className="text-gray-500 font-mono text-[11px]">
-              Utility · ID: 921754134307275
-            </div>
+        {/* Modal Body: Template Selection & Preview */}
+        <div className="p-5 space-y-3.5">
+          {/* Template Selection */}
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">
+              Select Approved Template <span className="text-rose-500">*</span>
+            </label>
+            <select
+              value={isCustom ? "custom" : selectedTemplate}
+              onChange={(e) => {
+                if (e.target.value === "custom") {
+                  setIsCustom(true);
+                } else {
+                  setIsCustom(false);
+                  setSelectedTemplate(e.target.value);
+                  setLanguageCode(e.target.value === "holiday_notification" ? "en" : "en_US");
+                }
+              }}
+              className="w-full h-[34px] px-2.5 bg-gray-50 border border-gray-300 rounded-[6px] text-xs font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-600"
+            >
+              <option value="3p_direct_integration_test_template">3p_direct_integration_test_template (en_US · Live Approved)</option>
+              <option value="message_to_customers">message_to_customers (en_US · Missed Call Template)</option>
+              <option value="customer_update_notification">customer_update_notification (en_US · Custom Update)</option>
+              <option value="custom">Other / Custom Template Name...</option>
+            </select>
           </div>
 
-          {/* EXACT WHATSAPP CHAT PREVIEW - with rounded-[6px] */}
-          <div className="space-y-1">
-            <div className="flex items-center justify-between text-xs font-semibold text-gray-700">
-              <span className="flex items-center space-x-1">
-                <Sparkles className="w-3 h-3 text-emerald-600" />
-                <span>Message Preview (Recipient View)</span>
-              </span>
-              <span className="text-[11px] text-gray-400 font-normal">WhatsApp Cloud API</span>
-            </div>
-
-            {/* Chat Container */}
-            <div className="bg-[#efeae2] border border-[#e0dad0] rounded-[6px] p-3 shadow-inner">
-              {/* WhatsApp Bubble */}
-              <div className="bg-white rounded-[6px] p-3 shadow-2xs max-w-sm space-y-1.5 border border-gray-100">
-                {/* Header: GamaNext */}
-                <div>
-                  <h4 className="font-bold text-sm text-gray-900 flex items-center">
-                    <span>GamaNext</span>
-                    <sup className="text-[10px] font-bold text-blue-700 ml-0.5">™</sup>
-                  </h4>
-                </div>
-
-                {/* Merged message: Hi {Client Name}, {message} */}
-                <div className="text-xs text-gray-800 leading-relaxed">
-                  <span>Hi <strong className="font-semibold text-gray-900">{contact.name}</strong>, </span>
-                  <span>{customMessage.trim() || <span className="text-gray-400 italic">we missed your call. Please let us know if you're available to connect.</span>}</span>
-                </div>
-
-                {/* Bubble Timestamp */}
-                <div className="flex items-center justify-end text-[10px] text-gray-400 space-x-1 pt-0.5">
-                  <span>07:59</span>
-                  <CheckCheck className="w-3.5 h-3.5 text-blue-500" />
-                </div>
-
-                {/* View Website Button: rounded-[6px] */}
-                <div className="border-t border-gray-200 pt-2 mt-1">
-                  <a
-                    href={websiteUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="w-full h-[34px] px-3 bg-gray-50 hover:bg-emerald-50 hover:text-emerald-700 rounded-[6px] text-xs font-semibold text-[#0B4FBA] transition flex items-center justify-center space-x-1.5 border border-gray-200"
-                  >
-                    <Globe className="w-3.5 h-3.5" />
-                    <span>View Website</span>
-                  </a>
-                </div>
+          {/* Custom Template Name Input if selected */}
+          {isCustom && (
+            <div className="space-y-2">
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">
+                  Template Name (as in Meta WhatsApp Manager)
+                </label>
+                <input
+                  type="text"
+                  value={customTemplateName}
+                  onChange={(e) => setCustomTemplateName(e.target.value)}
+                  placeholder="e.g. holiday_notification"
+                  className="w-full h-[34px] px-3 bg-gray-50 border border-gray-300 rounded-[6px] text-xs font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-600 focus:bg-white transition"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">
+                  Language Code
+                </label>
+                <input
+                  type="text"
+                  value={languageCode}
+                  onChange={(e) => setLanguageCode(e.target.value)}
+                  placeholder="en_US or en"
+                  className="w-full h-[34px] px-3 bg-gray-50 border border-gray-300 rounded-[6px] text-xs font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-600 focus:bg-white transition"
+                />
               </div>
             </div>
-          </div>
+          )}
 
-          {/* Quick suggestions chips: rounded-[6px] */}
-          <div className="space-y-1">
-            <span className="text-[11px] font-semibold text-gray-600">Quick Message Templates:</span>
-            <div className="flex flex-wrap gap-1.5">
-              {suggestions.map((s, idx) => (
-                <button
-                  key={idx}
-                  type="button"
-                  onClick={() => setCustomMessage(s.text)}
-                  className="h-[28px] px-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-[11px] rounded-[6px] transition border border-gray-200 flex items-center"
-                >
-                  {s.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Message Textarea: rounded-[6px] */}
+          {/* Optional Editable Message after {{1}} (Variable {{2}}) */}
           <div>
             <div className="flex items-center justify-between mb-1">
-              <label htmlFor={singleMessageInputId} className="block text-xs font-semibold text-gray-700">
-                Message Content (Merged with Client Name) <span className="text-rose-500">*</span>
+              <label className="block text-xs font-medium text-gray-700">
+                Message after {"{{1}}"} (Variable {"{{2}}"})
               </label>
-              <span className="text-[11px] text-emerald-700 font-medium">
-                Prefixed with: "Hi {contact.name}, "
-              </span>
+              <span className="text-[10px] text-gray-400 font-normal">Optional · For templates with {"{{2}}"}</span>
             </div>
-            <textarea
-              id={singleMessageInputId}
-              rows={2}
+            <input
+              type="text"
               value={customMessage}
               onChange={(e) => setCustomMessage(e.target.value)}
-              placeholder="Write the message to merge and send..."
-              className="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-[6px] text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-600 focus:bg-white transition resize-none"
+              placeholder="e.g. tomorrow is a holiday due to Ganesh Chaturthi. Our team will resume work on Monday."
+              className="w-full h-[34px] px-3 bg-gray-50 border border-gray-300 rounded-[6px] text-xs font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-600 focus:bg-white transition"
             />
-            <div className="flex justify-between items-center text-[11px] text-gray-400 mt-0.5">
-              <span>Will be sent to: <strong className="text-gray-700">{contact.phone}</strong></span>
-              <span>{customMessage.length} characters</span>
-            </div>
           </div>
 
-          {/* Website URL: h-[38px] & rounded-[6px] */}
+          {/* Template Live Preview */}
           <div>
-            <label htmlFor={websiteInputId} className="block text-xs font-semibold text-gray-700 mb-1">
-              Website URL (for "View Website" button)
+            <label className="block text-xs font-medium text-gray-700 mb-1">
+              Template Message Preview:
             </label>
-            <div className="relative">
-              <Globe className="w-3.5 h-3.5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
-              <input
-                id={websiteInputId}
-                type="url"
-                value={websiteUrl}
-                onChange={(e) => setWebsiteUrl(e.target.value)}
-                placeholder="https://www.gamanext.com"
-                className="w-full h-[38px] pl-8 pr-3 bg-gray-50 border border-gray-300 rounded-[6px] text-xs font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-600 focus:bg-white transition"
-              />
+            <div className="p-3 bg-emerald-50/70 border border-emerald-200 rounded-[6px] text-xs text-gray-800 leading-relaxed font-sans shadow-2xs">
+              <div className="flex items-center space-x-1.5 text-emerald-800 font-medium text-[11px] mb-1">
+                <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Meta Approved Cloud API Template</span>
+              </div>
+              <p className="text-gray-900 whitespace-pre-wrap">{getPreviewText()}</p>
+              {activeTemplateName === "message_to_customers" ? (
+                <div className="text-[10px] text-gray-500 mt-2 font-mono">
+                  Static template · No variables in body
+                </div>
+              ) : (
+                <div className="text-[10px] text-gray-500 mt-2 font-mono space-y-0.5">
+                  <div>Variable {"{{1}}"} &rarr; <strong className="text-emerald-700">{contact.name}</strong></div>
+                  {customMessage.trim() && (
+                    <div>Variable {"{{2}}"} &rarr; <strong className="text-emerald-700">{customMessage.trim()}</strong></div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
 
-          {/* Delivery Mode Toggle: rounded-[6px] */}
-          <div className="bg-gray-50 p-2.5 rounded-[6px] border border-gray-200 space-y-1.5">
-            <span className="text-xs font-semibold text-gray-700">API Send Mode:</span>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-              <label
-                className={`p-2 rounded-[6px] border cursor-pointer flex items-center space-x-2 transition ${
-                  sendMode === "gamanext_message"
-                    ? "bg-emerald-50 border-emerald-500 text-emerald-900 font-medium"
-                    : "bg-white border-gray-200 text-gray-700 hover:bg-gray-50"
-                }`}
-              >
-                <input
-                  type="radio"
-                  name="sendMode"
-                  checked={sendMode === "gamanext_message"}
-                  onChange={() => setSendMode("gamanext_message")}
-                  className="text-emerald-600"
-                />
-                <div>
-                  <div className="font-bold text-[11px]">GamaNext™ Merged Message</div>
-                  <div className="text-[10px] text-gray-500">Includes GamaNext™ & View Website</div>
-                </div>
-              </label>
-
-              <label
-                className={`p-2 rounded-[6px] border cursor-pointer flex items-center space-x-2 transition ${
-                  sendMode === "message_to_customers_template"
-                    ? "bg-emerald-50 border-emerald-500 text-emerald-900 font-medium"
-                    : "bg-white border-gray-200 text-gray-700 hover:bg-gray-50"
-                }`}
-              >
-                <input
-                  type="radio"
-                  name="sendMode"
-                  checked={sendMode === "message_to_customers_template"}
-                  onChange={() => setSendMode("message_to_customers_template")}
-                  className="text-emerald-600"
-                />
-                <div>
-                  <div className="font-bold text-[11px]">Meta message_to_customers Template</div>
-                  <div className="text-[10px] text-gray-500">Official Cloud API template message</div>
-                </div>
-              </label>
-            </div>
-          </div>
-
-          {/* API Result Feedback: rounded-[6px] */}
           {apiResult && (
             <div
-              className={`p-2.5 rounded-[6px] border text-xs space-y-1.5 animate-in fade-in ${
+              className={`p-2.5 rounded-[6px] border text-xs flex items-center space-x-2 ${
                 apiResult.success
                   ? "bg-emerald-50 border-emerald-200 text-emerald-800"
                   : "bg-rose-50 border-rose-200 text-rose-800"
               }`}
             >
-              <div className="flex items-center space-x-1.5 font-semibold">
-                {apiResult.success ? (
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                ) : (
-                  <AlertCircle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
-                )}
-                <span>{apiResult.text}</span>
-              </div>
-              {apiResult.details && (
-                <p className="text-[11px] text-rose-700 pl-5">{apiResult.details}</p>
+              {apiResult.success ? (
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+              ) : (
+                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
               )}
-
-              {!apiResult.success && (
-                <div className="pt-1 pl-5">
-                  <a
-                    href={directWhatsAppUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center space-x-1.5 h-[32px] px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-[6px] text-[11px] font-semibold transition"
-                  >
-                    <span>Open in WhatsApp Web</span>
-                    <ExternalLink className="w-3 h-3" />
-                  </a>
-                </div>
-              )}
+              <span>{apiResult.text}</span>
             </div>
           )}
 
-          {/* Action Buttons: h-[38px] & rounded-[6px] */}
-          <div className="flex items-center justify-between pt-1 border-t border-gray-100">
-            <a
-              href={directWhatsAppUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="text-xs text-emerald-700 hover:text-emerald-900 font-medium flex items-center space-x-1"
+          <div className="flex items-center justify-end space-x-2 pt-2 border-t border-gray-100">
+            <button
+              type="button"
+              onClick={onClose}
+              className="h-[34px] px-4 border border-gray-300 rounded-[6px] text-xs font-medium text-gray-700 hover:bg-gray-50 transition"
             >
-              <span>Open in WhatsApp Web</span>
-              <ExternalLink className="w-3 h-3" />
-            </a>
-
-            <div className="flex space-x-2">
-              <button
-                type="button"
-                onClick={onClose}
-                className="h-[38px] px-4 border border-gray-300 rounded-[6px] text-xs font-semibold text-gray-700 hover:bg-gray-50 transition"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                disabled={sending || (!customMessage.trim() && sendMode === "gamanext_message")}
-                onClick={handleSend}
-                className="h-[38px] px-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-[6px] text-xs font-semibold shadow-2xs transition disabled:opacity-50 flex items-center space-x-1.5"
-              >
-                {sending ? (
-                  <>
-                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                    <span>Sending...</span>
-                  </>
-                ) : (
-                  <>
-                    <Send className="w-3.5 h-3.5" />
-                    <span>Send Message</span>
-                  </>
-                )}
-              </button>
-            </div>
+              Cancel
+            </button>
+            <button
+              type="button"
+              disabled={sending || !activeTemplateName}
+              onClick={handleSend}
+              className="h-[34px] px-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-[6px] text-xs font-medium shadow-2xs transition disabled:opacity-50 flex items-center space-x-1.5"
+            >
+              {sending ? (
+                <>
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  <span>Sending Template...</span>
+                </>
+              ) : (
+                <>
+                  <Send className="w-3.5 h-3.5" />
+                  <span>Send Template</span>
+                </>
+              )}
+            </button>
           </div>
         </div>
       </div>
@@ -1306,18 +1142,13 @@ function BulkSendModal({
     initialSelectedIds.length > 0 ? initialSelectedIds : allContacts.map((c) => c.id || c.phone)
   );
   const [searchTerm, setSearchTerm] = useState("");
-  const [bulkMessage, setBulkMessage] = useState(
-    "we missed your call. Please let us know if you're available to connect."
-  );
-  const [websiteUrl, setWebsiteUrl] = useState("https://www.gamanext.com");
-  const [sendMode, setSendMode] = useState<"gamanext_message" | "message_to_customers_template">("gamanext_message");
+  const [selectedTemplate, setSelectedTemplate] = useState("3p_direct_integration_test_template");
+  const [languageCode, setLanguageCode] = useState("en_US");
+  const [customMessage, setCustomMessage] = useState("");
 
   const [sending, setSending] = useState(false);
   const [progress, setProgress] = useState({ current: 0, total: 0, successes: 0, failures: 0 });
   const [logs, setLogs] = useState<{ name: string; phone: string; status: "success" | "error"; error?: string }[]>([]);
-
-  const bulkMessageInputId = useId();
-  const bulkWebsiteInputId = useId();
 
   // Resolve target contacts
   const targetContacts =
@@ -1348,10 +1179,9 @@ function BulkSendModal({
       c.phone.includes(searchTerm)
   );
 
-  // Execute Bulk Send
+  // Execute Bulk Send using Template
   const handleExecuteBulkSend = async () => {
     if (targetContacts.length === 0) return;
-    if (!bulkMessage.trim() && sendMode === "gamanext_message") return;
 
     setSending(true);
     setProgress({ current: 0, total: targetContacts.length, successes: 0, failures: 0 });
@@ -1369,23 +1199,19 @@ function BulkSendModal({
         failures,
       });
 
-      // Merged with each client's specific name: Hi {contact.name}, {bulkMessage}
-      const formattedText = `*GamaNext™*\n\nHi ${contact.name}, ${bulkMessage.trim()}\n\n🌐 *View Website:* ${websiteUrl}\n_WhatsApp Business Platform · GamaNext™_`;
-
       try {
-        const payload =
-          sendMode === "message_to_customers_template"
-            ? {
-                to: contact.phone,
-                type: "template",
-                templateName: "message_to_customers",
-                languageCode: "en_US",
-              }
-            : {
-                to: contact.phone,
-                type: "text",
-                message: formattedText,
-              };
+        const payload = {
+          to: contact.phone,
+          phone: contact.phone,
+          name: contact.name,
+          type: "template",
+          templateName: selectedTemplate,
+          languageCode: languageCode || "en_US",
+          variables:
+            selectedTemplate === "customer_update_notification"
+              ? [contact.name, customMessage.trim() || ""]
+              : undefined,
+        };
 
         const res = await fetch("/api/whatsapp/send", {
           method: "POST",
@@ -1401,8 +1227,10 @@ function BulkSendModal({
             phone: contact.phone,
             contactName: contact.name,
             direction: "outbound",
-            type: sendMode === "message_to_customers_template" ? "template" : "text",
-            message: sendMode === "message_to_customers_template" ? "Template: message_to_customers (GamaNext™)" : formattedText,
+            type: "template",
+            message: customMessage.trim()
+              ? `Template: ${selectedTemplate} | Hi ${contact.name}, ${customMessage.trim()}`
+              : `Template: ${selectedTemplate} (Sent to ${contact.name})`,
             status: "sent",
             waMessageId: data.waMessageId || undefined,
             timestamp: new Date().toISOString(),
@@ -1413,12 +1241,16 @@ function BulkSendModal({
           ]);
         } else {
           failures++;
+          const errorMsg =
+            typeof data.error === "object"
+              ? data.error?.message || JSON.stringify(data.error)
+              : data.error || "Meta API error";
           setLogs((prev) => [
             {
               name: contact.name,
               phone: contact.phone,
               status: "error",
-              error: data.error || "Meta API error",
+              error: errorMsg,
             },
             ...prev,
           ]);
@@ -1437,7 +1269,7 @@ function BulkSendModal({
         ]);
       }
 
-      // Small delay between requests to avoid rate limits
+      // Delay between requests to avoid Meta rate limits
       if (i < targetContacts.length - 1) {
         await new Promise((r) => setTimeout(r, 400));
       }
@@ -1468,8 +1300,8 @@ function BulkSendModal({
               <Send className="w-4 h-4" />
             </div>
             <div>
-              <h2 className="font-bold text-base">Bulk Send WhatsApp</h2>
-              <p className="text-[11px] text-blue-100">Broadcast message to all or selected clients</p>
+              <h2 className="font-medium text-base">Bulk Send WhatsApp Template</h2>
+              <p className="text-[11px] text-blue-100">Broadcast approved template to all or selected clients</p>
             </div>
           </div>
           {!sending && (
@@ -1481,9 +1313,9 @@ function BulkSendModal({
 
         {/* Modal Body */}
         <div className="p-5 space-y-4">
-          {/* Recipient Audience Chooser: rounded-[6px] */}
+          {/* Recipient Audience Chooser */}
           <div className="space-y-1.5">
-            <span className="text-xs font-semibold text-gray-700">Choose Recipients:</span>
+            <span className="text-xs font-medium text-gray-700">Choose Recipients:</span>
             <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
@@ -1495,11 +1327,11 @@ function BulkSendModal({
                     : "bg-white border-gray-200 text-gray-700 hover:bg-gray-50"
                 }`}
               >
-                <div className="w-7 h-7 rounded-[6px] bg-blue-100 text-[#0B4FBA] flex items-center justify-center font-bold text-xs">
+                <div className="w-7 h-7 rounded-[6px] bg-blue-100 text-[#0B4FBA] flex items-center justify-center font-medium text-xs">
                   {allContacts.length}
                 </div>
                 <div>
-                  <div className="font-bold text-xs">All Clients</div>
+                  <div className="font-medium text-xs">All Clients</div>
                   <div className="text-[11px] text-gray-500">{allContacts.length} contacts</div>
                 </div>
               </button>
@@ -1514,18 +1346,18 @@ function BulkSendModal({
                     : "bg-white border-gray-200 text-gray-700 hover:bg-gray-50"
                 }`}
               >
-                <div className="w-7 h-7 rounded-[6px] bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold text-xs">
+                <div className="w-7 h-7 rounded-[6px] bg-emerald-100 text-emerald-800 flex items-center justify-center font-medium text-xs">
                   {selectedIds.length}
                 </div>
                 <div>
-                  <div className="font-bold text-xs">Selected Clients</div>
+                  <div className="font-medium text-xs">Selected Clients</div>
                   <div className="text-[11px] text-gray-500">{selectedIds.length} chosen</div>
                 </div>
               </button>
             </div>
           </div>
 
-          {/* If Selected: Client Selection Table: rounded-[6px] */}
+          {/* If Selected: Client Selection Table */}
           {recipientTarget === "selected" && (
             <div className="border border-gray-200 rounded-[6px] p-2.5 bg-gray-50/50 space-y-2">
               <div className="flex items-center justify-between gap-2">
@@ -1539,7 +1371,7 @@ function BulkSendModal({
                 <button
                   type="button"
                   onClick={handleSelectAllModal}
-                  className="h-[34px] px-2.5 text-xs font-semibold text-gray-700 bg-white border border-gray-300 rounded-[6px] hover:bg-gray-50 shrink-0 flex items-center"
+                  className="h-[34px] px-2.5 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-[6px] hover:bg-gray-50 shrink-0 flex items-center"
                 >
                   {selectedIds.length === allContacts.length ? "Deselect All" : "Select All"}
                 </button>
@@ -1561,7 +1393,7 @@ function BulkSendModal({
                         onChange={() => handleToggle(id)}
                         className="w-3.5 h-3.5 rounded-[4px] text-emerald-600 focus:ring-emerald-500"
                       />
-                      <span className="font-semibold text-gray-800">{c.name}</span>
+                      <span className="font-medium text-gray-800">{c.name}</span>
                       <span className="text-gray-500 font-mono text-[11px]">{c.phone}</span>
                     </label>
                   );
@@ -1570,122 +1402,77 @@ function BulkSendModal({
             </div>
           )}
 
-          {/* Template Banner Preview: rounded-[6px] */}
-          <div className="bg-[#efeae2] border border-[#e0dad0] rounded-[6px] p-2.5 text-xs">
-            <div className="bg-white rounded-[6px] p-2.5 shadow-2xs max-w-sm space-y-1.5 border border-gray-100">
-              <div className="font-bold text-gray-900 flex items-center">
-                <span>GamaNext</span>
-                <sup className="text-[10px] font-bold text-blue-700 ml-0.5">™</sup>
-              </div>
-              <div className="text-[11px] text-gray-700">
-                <span>Hi <span className="font-semibold text-gray-900">&#123;Client Name&#125;</span>, </span>
-                <span>{bulkMessage || "we missed your call. Please let us know if you're available to connect."}</span>
-              </div>
-              <div className="flex items-center justify-end text-[10px] text-gray-400 space-x-1 pt-0.5">
-                <span>07:59</span>
-                <CheckCheck className="w-3.5 h-3.5 text-blue-500" />
-              </div>
-              <div className="border-t border-gray-200 pt-1.5 mt-1">
-                <div className="w-full h-[32px] px-3 bg-gray-50 rounded-[6px] text-xs font-semibold text-[#0B4FBA] flex items-center justify-center space-x-1.5 border border-gray-200">
-                  <Globe className="w-3.5 h-3.5" />
-                  <span>View Website</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Message Textarea: rounded-[6px] */}
-          <div>
-            <label htmlFor={bulkMessageInputId} className="block text-xs font-semibold text-gray-700 mb-1">
-              Broadcast Message Content (Merged with Each Client Name) <span className="text-rose-500">*</span>
+          {/* Template Selection for Broadcast */}
+          <div className="space-y-2">
+            <label className="block text-xs font-medium text-gray-700">
+              Select Approved WhatsApp Template:
             </label>
-            <textarea
-              id={bulkMessageInputId}
-              rows={2}
-              value={bulkMessage}
-              onChange={(e) => setBulkMessage(e.target.value)}
-              placeholder="Enter message to merge and broadcast to each client..."
+            <select
+              value={selectedTemplate}
+              onChange={(e) => {
+                setSelectedTemplate(e.target.value);
+                setLanguageCode("en_US");
+              }}
               disabled={sending}
-              className="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-[6px] text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-600 focus:bg-white transition resize-none disabled:opacity-60"
-            />
-            <div className="flex justify-between items-center text-[11px] text-gray-500 mt-0.5">
-              <span>
-                Recipients: <strong className="text-emerald-700">{targetContacts.length} clients</strong>
-              </span>
-              <span>{bulkMessage.length} characters</span>
-            </div>
-          </div>
+              className="w-full h-[34px] px-2.5 bg-gray-50 border border-gray-300 rounded-[6px] text-xs font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-600"
+            >
+              <option value="3p_direct_integration_test_template">3p_direct_integration_test_template (en_US · Live Approved)</option>
+              <option value="message_to_customers">message_to_customers (en_US · Missed Call Template)</option>
+              <option value="customer_update_notification">customer_update_notification (en_US · Custom Update)</option>
+            </select>
 
-          {/* Website URL: h-[38px] & rounded-[6px] */}
-          <div>
-            <label htmlFor={bulkWebsiteInputId} className="block text-xs font-semibold text-gray-700 mb-1">
-              Website URL (for "View Website" button)
-            </label>
-            <div className="relative">
-              <Globe className="w-3.5 h-3.5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            {/* Optional Editable Message after {{1}} (Variable {{2}}) */}
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs font-medium text-gray-700">
+                  Message after {"{{1}}"} (Variable {"{{2}}"})
+                </label>
+                <span className="text-[10px] text-gray-400 font-normal">Optional · For templates with {"{{2}}"}</span>
+              </div>
               <input
-                id={bulkWebsiteInputId}
-                type="url"
-                value={websiteUrl}
-                onChange={(e) => setWebsiteUrl(e.target.value)}
-                placeholder="https://www.gamanext.com"
+                type="text"
+                value={customMessage}
+                onChange={(e) => setCustomMessage(e.target.value)}
+                placeholder="e.g. tomorrow is a holiday due to Ganesh Chaturthi. Our team will resume work on Monday."
                 disabled={sending}
-                className="w-full h-[38px] pl-8 pr-3 bg-gray-50 border border-gray-300 rounded-[6px] text-xs font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-600 focus:bg-white transition disabled:opacity-60"
+                className="w-full h-[34px] px-3 bg-gray-50 border border-gray-300 rounded-[6px] text-xs font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-600 focus:bg-white transition"
               />
             </div>
-          </div>
 
-          {/* Mode Selector: rounded-[6px] */}
-          <div className="bg-gray-50 p-2.5 rounded-[6px] border border-gray-200 space-y-1.5">
-            <span className="text-xs font-semibold text-gray-700">API Send Mode:</span>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-              <label
-                className={`p-2 rounded-[6px] border cursor-pointer flex items-center space-x-2 transition ${
-                  sendMode === "gamanext_message"
-                    ? "bg-emerald-50 border-emerald-500 text-emerald-900 font-medium"
-                    : "bg-white border-gray-200 text-gray-700 hover:bg-gray-50"
-                }`}
-              >
-                <input
-                  type="radio"
-                  name="bulkSendMode"
-                  checked={sendMode === "gamanext_message"}
-                  onChange={() => setSendMode("gamanext_message")}
-                  className="text-emerald-600"
-                />
-                <div>
-                  <div className="font-bold text-[11px]">GamaNext™ Merged Message</div>
-                  <div className="text-[10px] text-gray-500">Includes GamaNext™ & View Website</div>
+            <div className="p-3 bg-emerald-50/70 border border-emerald-200 rounded-[6px] text-xs text-gray-800 leading-relaxed font-sans shadow-2xs">
+              <div className="flex items-center space-x-1.5 text-emerald-800 font-medium text-[11px] mb-1">
+                <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Meta Approved Cloud API Template</span>
+              </div>
+              <p className="text-gray-900 whitespace-pre-wrap">
+                {selectedTemplate === "3p_direct_integration_test_template"
+                  ? "Integration Test\n\nWelcome! This is a test message from the WhatsApp Business Platform. You have successfully configured your WhatsApp Business account and completed onboarding. You can now start sending messages to your customers.\n\nWhatsApp Business Platform"
+                  : selectedTemplate === "message_to_customers"
+                  ? "Missed call\n\nHi {{Client Name}}, we missed your call. Please let us know if you're available to reschedule.\n\n[ Reschedule Call ]"
+                  : customMessage.trim()
+                  ? `Hello {{Client Name}}, please note the following update regarding our services: ${customMessage.trim()}. Thank you for your cooperation and support.`
+                  : "Hello {{Client Name}}, please note the following update regarding our services: [Type custom message]. Thank you for your cooperation and support."}
+              </p>
+              {selectedTemplate === "message_to_customers" ? (
+                <div className="text-[10px] text-gray-500 mt-2 font-mono">
+                  Static template · No variables in body
                 </div>
-              </label>
-
-              <label
-                className={`p-2 rounded-[6px] border cursor-pointer flex items-center space-x-2 transition ${
-                  sendMode === "message_to_customers_template"
-                    ? "bg-emerald-50 border-emerald-500 text-emerald-900 font-medium"
-                    : "bg-white border-gray-200 text-gray-700 hover:bg-gray-50"
-                }`}
-              >
-                <input
-                  type="radio"
-                  name="bulkSendMode"
-                  checked={sendMode === "message_to_customers_template"}
-                  onChange={() => setSendMode("message_to_customers_template")}
-                  className="text-emerald-600"
-                />
-                <div>
-                  <div className="font-bold text-[11px]">Meta message_to_customers Template</div>
-                  <div className="text-[10px] text-gray-500">Official Cloud API template message</div>
+              ) : (
+                <div className="text-[10px] text-gray-500 mt-2 font-mono space-y-0.5">
+                  <div>Variable {"{{1}}"} will be automatically filled with each recipient's name.</div>
+                  {customMessage.trim() && (
+                    <div>Variable {"{{2}}"} will be set to: <strong className="text-emerald-700">{customMessage.trim()}</strong></div>
+                  )}
                 </div>
-              </label>
+              )}
             </div>
           </div>
 
-          {/* Progress / Live status: rounded-[6px] */}
+          {/* Progress / Live status */}
           {sending && (
             <div className="space-y-1.5 p-3 bg-gray-50 border border-gray-200 rounded-[6px]">
-              <div className="flex justify-between text-xs font-semibold text-gray-700">
-                <span>Sending WhatsApp Messages...</span>
+              <div className="flex justify-between text-xs font-medium text-gray-700">
+                <span>Sending WhatsApp Template Messages...</span>
                 <span>
                   {progress.current} / {progress.total}
                 </span>
@@ -1705,12 +1492,12 @@ function BulkSendModal({
             </div>
           )}
 
-          {/* Completed summary logs: rounded-[6px] */}
+          {/* Completed summary logs */}
           {!sending && logs.length > 0 && (
             <div className="p-2.5 bg-gray-50 border border-gray-200 rounded-[6px] space-y-1.5">
-              <div className="text-xs font-bold text-gray-800 flex items-center justify-between">
+              <div className="text-xs font-medium text-gray-800 flex items-center justify-between">
                 <span>Broadcast Summary:</span>
-                <span className="text-emerald-700 font-semibold">
+                <span className="text-emerald-700 font-medium">
                   {progress.successes} Sent / {progress.failures} Failed
                 </span>
               </div>
@@ -1719,7 +1506,7 @@ function BulkSendModal({
                   <div key={idx} className="py-0.5 flex items-center justify-between">
                     <span className="text-gray-800 font-medium">{l.name} ({l.phone})</span>
                     {l.status === "success" ? (
-                      <span className="text-emerald-600 font-semibold text-[11px]">✓ Sent</span>
+                      <span className="text-emerald-600 font-medium text-[11px]">✓ Sent</span>
                     ) : (
                       <span className="text-rose-600 text-[11px]" title={l.error}>
                         ✗ {l.error || "Failed"}
@@ -1731,21 +1518,21 @@ function BulkSendModal({
             </div>
           )}
 
-          {/* Action Buttons: h-[38px] & rounded-[6px] */}
+          {/* Action Buttons */}
           <div className="flex space-x-2 pt-1">
             <button
               type="button"
               onClick={onClose}
               disabled={sending}
-              className="flex-1 h-[38px] border border-gray-300 rounded-[6px] text-xs font-semibold text-gray-700 hover:bg-gray-50 transition disabled:opacity-50"
+              className="flex-1 h-[34px] border border-gray-300 rounded-[6px] text-xs font-medium text-gray-700 hover:bg-gray-50 transition disabled:opacity-50"
             >
               Close
             </button>
             <button
               type="button"
               onClick={handleExecuteBulkSend}
-              disabled={sending || targetContacts.length === 0 || !bulkMessage.trim()}
-              className="flex-1 h-[38px] bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-[6px] text-xs font-semibold shadow-2xs transition disabled:opacity-50 flex items-center justify-center space-x-1.5"
+              disabled={sending || targetContacts.length === 0}
+              className="flex-1 h-[34px] bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-[6px] text-xs font-medium shadow-2xs transition disabled:opacity-50 flex items-center justify-center space-x-1.5"
             >
               {sending ? (
                 <>
@@ -1755,7 +1542,7 @@ function BulkSendModal({
               ) : (
                 <>
                   <Send className="w-3.5 h-3.5" />
-                  <span>Send to {targetContacts.length} Clients</span>
+                  <span>Send Template to {targetContacts.length} Clients</span>
                 </>
               )}
             </button>

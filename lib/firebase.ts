@@ -1223,6 +1223,92 @@ export async function deleteWhatsAppContact(id: string): Promise<boolean> {
   return true;
 }
 
+/* --- CLIENT CONTACTS (Dedicated directory for client contacts added separately) --- */
+const LOCAL_STORAGE_KEY_CLIENT_CONTACTS = "gamanext_client_contacts";
+
+export async function getClientContacts(): Promise<WhatsAppContact[]> {
+  try {
+    const q = query(collection(db, "client_contacts"), orderBy("createdAt", "desc"));
+    const snapshot = await getDocs(q);
+    const contacts: WhatsAppContact[] = [];
+    snapshot.forEach((docSnap) => {
+      contacts.push({ id: docSnap.id, ...docSnap.data() } as WhatsAppContact);
+    });
+    return dedupeContactsList(contacts);
+  } catch (err) {
+    console.warn("Firestore client contacts fetch notice:", err);
+  }
+  if (typeof window !== "undefined") {
+    const data = localStorage.getItem(LOCAL_STORAGE_KEY_CLIENT_CONTACTS);
+    if (data) {
+      try {
+        const parsed = JSON.parse(data);
+        if (Array.isArray(parsed)) {
+          return dedupeContactsList(parsed);
+        }
+      } catch (e) {}
+    }
+  }
+  return [];
+}
+
+export async function saveClientContact(contact: WhatsAppContact): Promise<WhatsAppContact> {
+  const item: WhatsAppContact = { ...contact, createdAt: new Date().toISOString() };
+  try {
+    const docRef = await addDoc(collection(db, "client_contacts"), item);
+    const created = { ...item, id: docRef.id };
+    if (typeof window !== "undefined") {
+      const existing = await getClientContacts();
+      const deduped = dedupeContactsList([
+        created,
+        ...existing.filter((c) => c.id !== created.id && c.phone !== created.phone),
+      ]);
+      localStorage.setItem(LOCAL_STORAGE_KEY_CLIENT_CONTACTS, JSON.stringify(deduped));
+    }
+    return created;
+  } catch (err) {
+    const created = { ...item, id: `cc-${Date.now()}` };
+    if (typeof window !== "undefined") {
+      const existing = await getClientContacts();
+      const deduped = dedupeContactsList([
+        created,
+        ...existing.filter((c) => c.id !== created.id && c.phone !== created.phone),
+      ]);
+      localStorage.setItem(LOCAL_STORAGE_KEY_CLIENT_CONTACTS, JSON.stringify(deduped));
+    }
+    return created;
+  }
+}
+
+export async function updateClientContact(
+  id: string,
+  data: Partial<WhatsAppContact>
+): Promise<boolean> {
+  try {
+    if (id) await updateDoc(doc(db, "client_contacts", id), data);
+  } catch (e) {}
+  if (typeof window !== "undefined") {
+    const existing = await getClientContacts();
+    const updated = dedupeContactsList(
+      existing.map((c) => (c.id === id ? { ...c, ...data } : c))
+    );
+    localStorage.setItem(LOCAL_STORAGE_KEY_CLIENT_CONTACTS, JSON.stringify(updated));
+  }
+  return true;
+}
+
+export async function deleteClientContact(id: string): Promise<boolean> {
+  try {
+    if (id) await deleteDoc(doc(db, "client_contacts", id));
+  } catch (e) {}
+  if (typeof window !== "undefined") {
+    const existing = await getClientContacts();
+    const filtered = dedupeContactsList(existing.filter((c) => c.id !== id));
+    localStorage.setItem(LOCAL_STORAGE_KEY_CLIENT_CONTACTS, JSON.stringify(filtered));
+  }
+  return true;
+}
+
 /* --- MESSAGES --- */
 
 export async function getWhatsAppMessages(phone: string): Promise<WhatsAppMessage[]> {

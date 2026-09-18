@@ -38,6 +38,7 @@ export default function InvoicesPage() {
   // Modals
   const [previewInvoice, setPreviewInvoice] = useState<CustomerInvoice | null>(null);
   const [whatsappInvoice, setWhatsappInvoice] = useState<CustomerInvoice | null>(null);
+  const [whatsappMessage, setWhatsappMessage] = useState("");
   const [sendingWhatsapp, setSendingWhatsapp] = useState(false);
   const [whatsappStatusMessage, setWhatsappStatusMessage] = useState<string | null>(null);
 
@@ -91,12 +92,18 @@ export default function InvoicesPage() {
     }
   };
 
+  const openWhatsappModal = (inv: CustomerInvoice) => {
+    setWhatsappInvoice(inv);
+    setWhatsappMessage(
+      `Hello ${inv.customerDetails.name}, here is your Invoice #${inv.invoiceNumber} for ₹${inv.total.toLocaleString("en-IN")} from ${inv.myCompanyDetails.companyName}.`
+    );
+    setWhatsappStatusMessage(null);
+  };
+
   const handleSendWhatsappMessage = async () => {
-    if (!whatsappInvoice) return;
+    if (!whatsappInvoice || !whatsappMessage.trim()) return;
     setSendingWhatsapp(true);
     setWhatsappStatusMessage(null);
-
-    const messageText = `*TAX INVOICE NOTICE* 🧾\n\nDear *${whatsappInvoice.customerDetails.name}* (${whatsappInvoice.customerDetails.businessName}),\n\nHere is your official invoice summary from *${whatsappInvoice.myCompanyDetails.companyName}*:\n\n📄 *Invoice No:* ${whatsappInvoice.invoiceNumber}\n📅 *Issue Date:* ${whatsappInvoice.issueDate}\n⏰ *Due Date:* ${whatsappInvoice.dueDate}\n💰 *Total Amount Due:* ₹${whatsappInvoice.total.toLocaleString("en-IN")}\n📌 *GSTIN:* ${whatsappInvoice.myCompanyDetails.gstin}\n\nPlease process payment to *UPI ID: ${whatsappInvoice.myCompanyDetails.upiId || "6281288314@upi"}*. Thank you!`;
 
     try {
       const res = await fetch("/api/whatsapp/send", {
@@ -104,18 +111,21 @@ export default function InvoicesPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           to: whatsappInvoice.customerDetails.mobileNumber,
-          message: messageText,
+          message: whatsappMessage.trim(),
         }),
       });
 
       const data = await res.json();
       if (data.success) {
-        setWhatsappStatusMessage("Message sent successfully via WhatsApp API!");
+        setWhatsappStatusMessage("Message sent successfully!");
+        setTimeout(() => {
+          setWhatsappInvoice(null);
+        }, 1000);
       } else {
-        setWhatsappStatusMessage(`API notice: ${data.error || "Falling back to WhatsApp direct link"}`);
+        setWhatsappStatusMessage(`Failed: ${data.error || "API error"}`);
       }
     } catch (err) {
-      setWhatsappStatusMessage("Sending via Web WhatsApp fallback...");
+      setWhatsappStatusMessage("Failed to send message.");
     } finally {
       setSendingWhatsapp(false);
     }
@@ -289,7 +299,7 @@ export default function InvoicesPage() {
                     </button>
 
                     <button
-                      onClick={() => setWhatsappInvoice(inv)}
+                      onClick={() => openWhatsappModal(inv)}
                       className="px-2.5 py-1.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 text-xs font-semibold rounded-lg transition-colors flex items-center space-x-1"
                     >
                       <MessageSquare className="w-3.5 h-3.5" />
@@ -328,7 +338,7 @@ export default function InvoicesPage() {
                   <span>Print PDF</span>
                 </button>
                 <button
-                  onClick={() => setWhatsappInvoice(previewInvoice)}
+                  onClick={() => openWhatsappModal(previewInvoice)}
                   className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-md flex items-center space-x-1"
                 >
                   <MessageSquare className="w-3.5 h-3.5" />
@@ -620,64 +630,63 @@ export default function InvoicesPage() {
         </div>
       )}
 
-      {/* WhatsApp Modal */}
+      {/* WhatsApp Modal: Only message then send */}
       {whatsappInvoice && (
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-xl border border-gray-200 w-full max-w-md overflow-hidden animate-in fade-in">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-emerald-600 text-white">
+          <div className="bg-white rounded-[6px] shadow-xl border border-gray-200 w-full max-w-md overflow-hidden animate-in fade-in">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 bg-emerald-600 text-white">
               <div className="flex items-center space-x-2">
-                <MessageSquare className="w-5 h-5" />
-                <h2 className="text-base font-bold">Send Invoice via WhatsApp</h2>
+                <MessageSquare className="w-4 h-4" />
+                <h2 className="text-sm font-medium">Send WhatsApp Message</h2>
               </div>
-              <button onClick={() => setWhatsappInvoice(null)} className="text-emerald-100 hover:text-white">
-                <X className="w-5 h-5" />
+              <button onClick={() => setWhatsappInvoice(null)} className="text-emerald-100 hover:text-white p-1 rounded-[6px]">
+                <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="p-6 space-y-4">
-              <div className="bg-gray-50 p-3.5 rounded-xl border border-gray-200 text-xs space-y-1">
-                <div className="font-bold text-gray-900">
-                  Recipient: {whatsappInvoice.customerDetails.name}
-                </div>
-                <div className="text-gray-600 font-mono">
-                  Phone: {whatsappInvoice.customerDetails.mobileNumber}
-                </div>
-                <div className="text-emerald-700 font-bold mt-1">
-                  Invoice #{whatsappInvoice.invoiceNumber} — Total: ₹
-                  {whatsappInvoice.total.toLocaleString("en-IN")}
-                </div>
+            <div className="p-5 space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1.5">
+                  Message <span className="text-rose-500">*</span>
+                </label>
+                <textarea
+                  autoFocus
+                  rows={4}
+                  value={whatsappMessage}
+                  onChange={(e) => setWhatsappMessage(e.target.value)}
+                  placeholder="Type message to send..."
+                  className="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-[6px] text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-600 focus:bg-white transition resize-none"
+                />
               </div>
 
               {whatsappStatusMessage && (
-                <div className="p-3 bg-emerald-50 text-emerald-800 rounded-lg text-xs font-medium border border-emerald-200">
+                <div className="p-2.5 bg-emerald-50 text-emerald-800 rounded-[6px] text-xs font-medium border border-emerald-200">
                   {whatsappStatusMessage}
                 </div>
               )}
 
-              <div className="space-y-2 pt-2">
+              <div className="flex items-center justify-end space-x-2 pt-2 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => setWhatsappInvoice(null)}
+                  className="h-[34px] px-4 border border-gray-300 rounded-[6px] text-xs font-medium text-gray-700 hover:bg-gray-50 transition"
+                >
+                  Cancel
+                </button>
                 <button
                   onClick={handleSendWhatsappMessage}
-                  disabled={sendingWhatsapp}
-                  className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg shadow-sm flex items-center justify-center space-x-2 disabled:opacity-50"
+                  disabled={sendingWhatsapp || !whatsappMessage.trim()}
+                  className="h-[34px] px-4 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium rounded-[6px] shadow-sm flex items-center justify-center space-x-1.5 disabled:opacity-50"
                 >
-                  <Send className="w-4 h-4" />
-                  <span>{sendingWhatsapp ? "Sending..." : "Send WhatsApp API Message"}</span>
+                  {sendingWhatsapp ? (
+                    <span>Sending...</span>
+                  ) : (
+                    <>
+                      <Send className="w-3.5 h-3.5" />
+                      <span>Send</span>
+                    </>
+                  )}
                 </button>
-
-                <a
-                  href={`https://wa.me/${whatsappInvoice.customerDetails.mobileNumber.replace(
-                    /[^\d]/g,
-                    ""
-                  )}?text=${encodeURIComponent(
-                    `Hello ${whatsappInvoice.customerDetails.name}, here is your Invoice ${whatsappInvoice.invoiceNumber} for ₹${whatsappInvoice.total} from ${whatsappInvoice.myCompanyDetails.companyName}.`
-                  )}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="w-full py-2.5 bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 text-xs font-bold rounded-lg flex items-center justify-center space-x-2 text-center"
-                >
-                  <Share2 className="w-4 h-4 text-emerald-600" />
-                  <span>Open Direct Web WhatsApp</span>
-                </a>
               </div>
             </div>
           </div>

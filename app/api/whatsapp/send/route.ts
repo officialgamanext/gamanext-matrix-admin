@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const WHATSAPP_API_VERSION = "v21.0";
+const WHATSAPP_API_VERSION = process.env.WHATSAPP_API_VERSION || "v21.0";
 const PHONE_NUMBER_ID = process.env.WHATSAPP_PHONE_NUMBER_ID || "";
 const ACCESS_TOKEN = process.env.WHATSAPP_ACCESS_TOKEN || "";
 
@@ -8,22 +8,33 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const {
+      phone,
       to,
       message,
-      type = "text",
+      type,
       templateName,
       languageCode = "en_US",
+      components,
+      name,
     } = body as {
-      to: string;
+      phone?: string;
+      to?: string;
       message?: string;
       type?: "text" | "template";
       templateName?: string;
       languageCode?: string;
+      components?: Array<{
+        type: string;
+        parameters?: Array<{ type: string; text?: string; [key: string]: unknown }>;
+        [key: string]: unknown;
+      }>;
+      name?: string;
     };
 
-    if (!to || (!message && type !== "template")) {
+    const target = phone || to;
+    if (!target) {
       return NextResponse.json(
-        { success: false, error: "Missing required fields: to, message" },
+        { success: false, error: "Missing required phone number ('phone' or 'to')" },
         { status: 400 }
       );
     }
@@ -40,31 +51,73 @@ export async function POST(req: NextRequest) {
     }
 
     // Normalize phone number to pure digits for Meta Cloud API (strip +, spaces, hyphens)
-    const normalizedTo = to.replace(/\D/g, "");
+    const normalizedTo = String(target).replace(/\D/g, "");
 
-    const finalTemplate = templateName || message || "message_to_customers";
+    const isTextMode = type === "text" && Boolean(message);
+    const finalTemplate = templateName || "message_to_customers";
 
-    const payload =
-      type === "text"
-        ? {
-            messaging_product: "whatsapp",
-            recipient_type: "individual",
-            to: normalizedTo,
-            type: "text",
-            text: {
-              preview_url: false,
-              body: message || "",
-            },
-          }
-        : {
-            messaging_product: "whatsapp",
-            to: normalizedTo,
-            type: "template",
-            template: {
-              name: finalTemplate,
-              language: { code: languageCode },
-            },
-          };
+    let finalComponents = components;
+
+    if (!finalComponents) {
+      if (Array.isArray(body?.variables) && body.variables.length > 0) {
+        finalComponents = [
+          {
+            type: "body",
+            parameters: body.variables.map((v: unknown) => ({
+              type: "text",
+              text: String(v ?? ""),
+            })),
+          },
+        ];
+      } else if (finalTemplate !== "3p_direct_integration_test_template" && name) {
+        const vars: string[] = [name];
+        if (body?.customMessage && String(body.customMessage).trim()) {
+          vars.push(String(body.customMessage).trim());
+        }
+        finalComponents = [
+          {
+            type: "body",
+            parameters: vars.map((text) => ({
+              type: "text",
+              text,
+            })),
+          },
+        ];
+      }
+    }
+
+    const templateObj: {
+      name: string;
+      language: { code: string };
+      components?: typeof finalComponents;
+    } = {
+      name: finalTemplate,
+      language: {
+        code: languageCode || "en_US",
+      },
+    };
+
+    if (finalComponents && finalComponents.length > 0) {
+      templateObj.components = finalComponents;
+    }
+
+    const payload = isTextMode
+      ? {
+          messaging_product: "whatsapp",
+          recipient_type: "individual",
+          to: normalizedTo,
+          type: "text",
+          text: {
+            preview_url: false,
+            body: message || "",
+          },
+        }
+      : {
+          messaging_product: "whatsapp",
+          to: normalizedTo,
+          type: "template",
+          template: templateObj,
+        };
 
     const apiUrl = `https://graph.facebook.com/${WHATSAPP_API_VERSION}/${PHONE_NUMBER_ID}/messages`;
 
