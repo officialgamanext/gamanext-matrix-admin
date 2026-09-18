@@ -1682,16 +1682,21 @@ export async function getCustomersFromStorage(): Promise<CustomerData[]> {
     const snapshot = await getDocs(collection(db, "customers"));
     const items: CustomerData[] = [];
     snapshot.forEach((docSnap) => {
-      items.push({ id: docSnap.id, ...docSnap.data() } as CustomerData);
+      items.push({ ...docSnap.data(), id: docSnap.id } as CustomerData);
     });
-    return items;
+    if (items.length > 0) {
+      const unique = Array.from(new Map(items.map((c) => [c.id, c])).values());
+      return unique;
+    }
   } catch (e) {}
 
   if (typeof window !== "undefined") {
     const stored = localStorage.getItem(LOCAL_STORAGE_KEY_CUSTOMERS);
     if (stored) {
       try {
-        return JSON.parse(stored);
+        const parsed: CustomerData[] = JSON.parse(stored);
+        const unique = Array.from(new Map(parsed.map((c) => [c.id, c])).values());
+        return unique;
       } catch (e) {}
     } else {
       localStorage.setItem(LOCAL_STORAGE_KEY_CUSTOMERS, JSON.stringify(SEED_CUSTOMERS));
@@ -1716,7 +1721,8 @@ export async function saveCustomerToStorage(customer: CustomerData): Promise<Cus
       const { id, ...data } = itemToSave;
       await updateDoc(doc(db, "customers", docId), data);
     } else {
-      const docRef = await addDoc(collection(db, "customers"), itemToSave);
+      const { id, ...dataToSave } = itemToSave;
+      const docRef = await addDoc(collection(db, "customers"), dataToSave);
       itemToSave.id = docRef.id;
     }
   } catch (e) {
@@ -1731,7 +1737,8 @@ export async function saveCustomerToStorage(customer: CustomerData): Promise<Cus
     if (isEdit) {
       updatedList = existing.map((c) => (c.id === itemToSave.id ? itemToSave : c));
     } else {
-      updatedList = [itemToSave, ...existing];
+      const filtered = existing.filter((c) => c.id !== itemToSave.id);
+      updatedList = [itemToSave, ...filtered];
     }
     localStorage.setItem(LOCAL_STORAGE_KEY_CUSTOMERS, JSON.stringify(updatedList));
   }
@@ -1761,10 +1768,11 @@ export async function getCustomerWorksFromStorage(customerId?: string): Promise<
     const snapshot = await getDocs(collection(db, "customer_works"));
     const items: CustomerWork[] = [];
     snapshot.forEach((docSnap) => {
-      items.push({ id: docSnap.id, ...docSnap.data() } as CustomerWork);
+      items.push({ ...docSnap.data(), id: docSnap.id } as CustomerWork);
     });
     if (items.length > 0) {
-      return customerId ? items.filter((w) => w.customerId === customerId) : items;
+      const unique = Array.from(new Map(items.map((w) => [w.id, w])).values());
+      return customerId ? unique.filter((w) => w.customerId === customerId) : unique;
     }
   } catch (e) {}
 
@@ -1773,7 +1781,8 @@ export async function getCustomerWorksFromStorage(customerId?: string): Promise<
     if (stored) {
       try {
         const all: CustomerWork[] = JSON.parse(stored);
-        return customerId ? all.filter((w) => w.customerId === customerId) : all;
+        const unique = Array.from(new Map(all.map((w) => [w.id, w])).values());
+        return customerId ? unique.filter((w) => w.customerId === customerId) : unique;
       } catch (e) {}
     } else {
       localStorage.setItem(LOCAL_STORAGE_KEY_CUSTOMER_WORKS, JSON.stringify(SEED_WORKS));
@@ -1798,7 +1807,8 @@ export async function saveCustomerWorkToStorage(work: CustomerWork): Promise<Cus
       const { id, ...data } = itemToSave;
       await updateDoc(doc(db, "customer_works", docId), data);
     } else {
-      const docRef = await addDoc(collection(db, "customer_works"), itemToSave);
+      const { id, ...dataToSave } = itemToSave;
+      const docRef = await addDoc(collection(db, "customer_works"), dataToSave);
       itemToSave.id = docRef.id;
     }
   } catch (e) {
@@ -1813,7 +1823,8 @@ export async function saveCustomerWorkToStorage(work: CustomerWork): Promise<Cus
     if (isEdit) {
       updatedList = existing.map((w) => (w.id === itemToSave.id ? itemToSave : w));
     } else {
-      updatedList = [itemToSave, ...existing];
+      const filtered = existing.filter((w) => w.id !== itemToSave.id);
+      updatedList = [itemToSave, ...filtered];
     }
     localStorage.setItem(LOCAL_STORAGE_KEY_CUSTOMER_WORKS, JSON.stringify(updatedList));
   }
@@ -1846,10 +1857,10 @@ export async function getWorkInstallmentsFromStorage(
     const snapshot = await getDocs(collection(db, "work_installments"));
     const items: WorkInstallment[] = [];
     snapshot.forEach((docSnap) => {
-      items.push({ id: docSnap.id, ...docSnap.data() } as WorkInstallment);
+      items.push({ ...docSnap.data(), id: docSnap.id } as WorkInstallment);
     });
     if (items.length > 0) {
-      let filtered = items;
+      let filtered = Array.from(new Map(items.map((i) => [i.id, i])).values());
       if (customerId) filtered = filtered.filter((i) => i.customerId === customerId);
       if (workId) filtered = filtered.filter((i) => i.workId === workId);
       return filtered;
@@ -1861,6 +1872,7 @@ export async function getWorkInstallmentsFromStorage(
     if (stored) {
       try {
         let all: WorkInstallment[] = JSON.parse(stored);
+        all = Array.from(new Map(all.map((i) => [i.id, i])).values());
         if (customerId) all = all.filter((i) => i.customerId === customerId);
         if (workId) all = all.filter((i) => i.workId === workId);
         return all;
@@ -1898,7 +1910,8 @@ export async function saveWorkInstallmentToStorage(
       const { id, ...data } = itemToSave;
       await updateDoc(doc(db, "work_installments", docId), data);
     } else {
-      const docRef = await addDoc(collection(db, "work_installments"), itemToSave);
+      const { id, ...dataToSave } = itemToSave;
+      const docRef = await addDoc(collection(db, "work_installments"), dataToSave);
       itemToSave.id = docRef.id;
     }
   } catch (e) {
@@ -1913,7 +1926,8 @@ export async function saveWorkInstallmentToStorage(
     if (isEdit) {
       updatedList = existing.map((i) => (i.id === itemToSave.id ? itemToSave : i));
     } else {
-      updatedList = [itemToSave, ...existing];
+      const filtered = existing.filter((i) => i.id !== itemToSave.id);
+      updatedList = [itemToSave, ...filtered];
     }
     localStorage.setItem(LOCAL_STORAGE_KEY_WORK_INSTALLMENTS, JSON.stringify(updatedList));
   }
@@ -1945,10 +1959,11 @@ export async function getCustomerInvoicesFromStorage(
     const snapshot = await getDocs(collection(db, "customer_invoices"));
     const items: CustomerInvoice[] = [];
     snapshot.forEach((docSnap) => {
-      items.push({ id: docSnap.id, ...docSnap.data() } as CustomerInvoice);
+      items.push({ ...docSnap.data(), id: docSnap.id } as CustomerInvoice);
     });
     if (items.length > 0) {
-      return customerId ? items.filter((inv) => inv.customerId === customerId) : items;
+      const unique = Array.from(new Map(items.map((inv) => [inv.id, inv])).values());
+      return customerId ? unique.filter((inv) => inv.customerId === customerId) : unique;
     }
   } catch (e) {}
 
@@ -1957,7 +1972,8 @@ export async function getCustomerInvoicesFromStorage(
     if (stored) {
       try {
         const all: CustomerInvoice[] = JSON.parse(stored);
-        return customerId ? all.filter((inv) => inv.customerId === customerId) : all;
+        const unique = Array.from(new Map(all.map((inv) => [inv.id, inv])).values());
+        return customerId ? unique.filter((inv) => inv.customerId === customerId) : unique;
       } catch (e) {}
     } else {
       localStorage.setItem(
@@ -1986,7 +2002,8 @@ export async function saveCustomerInvoiceToStorage(
       const { id, ...data } = itemToSave;
       await updateDoc(doc(db, "customer_invoices", docId), data);
     } else {
-      const docRef = await addDoc(collection(db, "customer_invoices"), itemToSave);
+      const { id, ...dataToSave } = itemToSave;
+      const docRef = await addDoc(collection(db, "customer_invoices"), dataToSave);
       itemToSave.id = docRef.id;
     }
   } catch (e) {
@@ -2001,7 +2018,8 @@ export async function saveCustomerInvoiceToStorage(
     if (isEdit) {
       updatedList = existing.map((inv) => (inv.id === itemToSave.id ? itemToSave : inv));
     } else {
-      updatedList = [itemToSave, ...existing];
+      const filtered = existing.filter((inv) => inv.id !== itemToSave.id);
+      updatedList = [itemToSave, ...filtered];
     }
     localStorage.setItem(LOCAL_STORAGE_KEY_CUSTOMER_INVOICES, JSON.stringify(updatedList));
   }

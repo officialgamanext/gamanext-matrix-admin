@@ -72,7 +72,11 @@ export default function CustomersPage() {
         getCustomerWorksFromStorage(),
         getWorkInstallmentsFromStorage(),
       ]);
-      setCustomers(cList);
+      // Deduplicate customers by ID to prevent duplicate items and duplicate keys
+      const uniqueCustomers = Array.from(
+        new Map(cList.filter((c) => c && c.id).map((c) => [c.id, c])).values()
+      );
+      setCustomers(uniqueCustomers);
       setWorks(wList);
       setInstallments(iList);
     } catch (err) {
@@ -297,13 +301,13 @@ export default function CustomersPage() {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredCustomers.map((cust) => {
+            {filteredCustomers.map((cust, idx) => {
               const custWorks = works.filter((w) => w.customerId === cust.id);
               const custWorksTotal = custWorks.reduce((acc, w) => acc + (w.amount || 0), 0);
 
               return (
                 <div
-                  key={cust.id}
+                  key={cust.id ? `${cust.id}-${idx}` : `cust-${idx}`}
                   onClick={() => router.push(`/customers/${cust.id}`)}
                   className="bg-white border border-gray-200 hover:border-[#0B4FBA]/40 rounded-xl p-5 shadow-2xs hover:shadow-md transition-all cursor-pointer group flex flex-col justify-between"
                 >
