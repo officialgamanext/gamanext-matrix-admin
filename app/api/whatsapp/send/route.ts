@@ -7,13 +7,21 @@ const ACCESS_TOKEN = process.env.WHATSAPP_ACCESS_TOKEN || "";
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { to, message, type = "text" } = body as {
+    const {
+      to,
+      message,
+      type = "text",
+      templateName,
+      languageCode = "en_US",
+    } = body as {
       to: string;
-      message: string;
+      message?: string;
       type?: "text" | "template";
+      templateName?: string;
+      languageCode?: string;
     };
 
-    if (!to || !message) {
+    if (!to || (!message && type !== "template")) {
       return NextResponse.json(
         { success: false, error: "Missing required fields: to, message" },
         { status: 400 }
@@ -31,8 +39,10 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Normalize phone number to E.164 (strip any + at start if Meta requires no +)
-    const normalizedTo = to.replace(/^\+/, "");
+    // Normalize phone number to pure digits for Meta Cloud API (strip +, spaces, hyphens)
+    const normalizedTo = to.replace(/\D/g, "");
+
+    const finalTemplate = templateName || message || "message_to_customers";
 
     const payload =
       type === "text"
@@ -43,7 +53,7 @@ export async function POST(req: NextRequest) {
             type: "text",
             text: {
               preview_url: false,
-              body: message,
+              body: message || "",
             },
           }
         : {
@@ -51,8 +61,8 @@ export async function POST(req: NextRequest) {
             to: normalizedTo,
             type: "template",
             template: {
-              name: message, // treat message as template name for template type
-              language: { code: "en_US" },
+              name: finalTemplate,
+              language: { code: languageCode },
             },
           };
 

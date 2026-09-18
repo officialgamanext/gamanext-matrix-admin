@@ -16,6 +16,7 @@ import {
   ChevronRight,
   Sparkles,
   MessageCircle,
+  Contact,
 } from "lucide-react";
 
 export default function Sidebar() {
@@ -31,6 +32,11 @@ export default function Sidebar() {
       name: "Customers",
       href: "/customers",
       icon: Users,
+    },
+    {
+      name: "Client Contacts",
+      href: "/client-contacts",
+      icon: Contact,
     },
     {
       name: "Invoices",
