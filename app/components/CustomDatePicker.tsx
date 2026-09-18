@@ -131,7 +131,7 @@ export default function CustomDatePicker({
         type="button"
         disabled={disabled}
         onClick={() => setIsOpen(!isOpen)}
-        className={`w-full px-3 py-1.5 text-xs border rounded-lg bg-white flex items-center justify-between transition-all select-none ${
+        className={`w-full px-3 py-1.5 text-xs border rounded-[6px] h-[34px] max-h-[34px] bg-white flex items-center justify-between transition-all select-none ${
           isOpen
             ? "border-[#0B4FBA] ring-2 ring-[#0B4FBA]/20 shadow-xs"
             : "border-gray-300 hover:border-gray-400"
@@ -149,14 +149,14 @@ export default function CustomDatePicker({
 
       {/* Calendar Popover */}
       {isOpen && (
-        <div className="absolute left-0 top-full mt-1 bg-white border border-gray-200 rounded-xl shadow-xl z-50 p-3 w-72 select-none animate-in fade-in slide-in-from-top-1 duration-150">
+        <div className="absolute left-0 top-full mt-1 bg-white border border-gray-200 rounded-[6px] shadow-xl z-50 p-3 w-72 select-none animate-in fade-in slide-in-from-top-1 duration-150">
           {/* Calendar Month & Year Header with Quick Dropdown Selectors */}
           <div className="flex items-center justify-between gap-1 pb-2 mb-2 border-b border-gray-100">
             <button
               type="button"
               onClick={handlePrevMonth}
               title="Previous Month"
-              className="p-1 hover:bg-gray-100 rounded-md text-gray-600 transition-colors shrink-0 cursor-pointer"
+              className="p-1 hover:bg-gray-100 rounded-[6px] text-gray-600 transition-colors shrink-0 cursor-pointer"
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
@@ -167,7 +167,7 @@ export default function CustomDatePicker({
                 value={currentMonth}
                 onChange={(e) => setViewDate(new Date(currentYear, parseInt(e.target.value), 1))}
                 aria-label="Select month"
-                className="text-xs font-semibold text-gray-800 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-md px-1.5 py-1 focus:outline-none focus:ring-1 focus:ring-[#0B4FBA] cursor-pointer"
+                className="text-xs font-medium text-gray-800 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-[6px] h-[28px] max-h-[34px] px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-[#0B4FBA] cursor-pointer"
               >
                 {monthNames.map((name, idx) => (
                   <option key={idx} value={idx}>
@@ -180,7 +180,7 @@ export default function CustomDatePicker({
                 value={currentYear}
                 onChange={(e) => setViewDate(new Date(parseInt(e.target.value), currentMonth, 1))}
                 aria-label="Select year"
-                className="text-xs font-semibold text-gray-800 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-md px-1.5 py-1 focus:outline-none focus:ring-1 focus:ring-[#0B4FBA] cursor-pointer"
+                className="text-xs font-medium text-gray-800 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-[6px] h-[28px] max-h-[34px] px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-[#0B4FBA] cursor-pointer"
               >
                 {yearOptions.map((yr) => (
                   <option key={yr} value={yr}>
@@ -194,7 +194,7 @@ export default function CustomDatePicker({
               type="button"
               onClick={handleNextMonth}
               title="Next Month"
-              className="p-1 hover:bg-gray-100 rounded-md text-gray-600 transition-colors shrink-0 cursor-pointer"
+              className="p-1 hover:bg-gray-100 rounded-[6px] text-gray-600 transition-colors shrink-0 cursor-pointer"
             >
               <ChevronRight className="w-4 h-4" />
             </button>
@@ -203,7 +203,7 @@ export default function CustomDatePicker({
           {/* Days of Week Header */}
           <div className="grid grid-cols-7 gap-1 text-center mb-1">
             {dayHeaders.map((d, i) => (
-              <span key={i} className="text-[10px] font-bold text-gray-400 uppercase">
+              <span key={i} className="text-[10px] font-medium text-gray-400 uppercase">
                 {d}
               </span>
             ))}
@@ -220,9 +220,9 @@ export default function CustomDatePicker({
                   type="button"
                   key={idx}
                   onClick={() => handleSelectDay(cell.dateStr)}
-                  className={`h-7 w-7 text-xs rounded-lg flex items-center justify-center transition-all ${
+                  className={`h-7 w-7 text-xs rounded-[6px] flex items-center justify-center transition-all ${
                     isSelected
-                      ? "bg-[#0B4FBA] text-white font-bold shadow-xs"
+                      ? "bg-[#0B4FBA] text-white font-medium shadow-xs"
                       : isCurrentMonth
                       ? "text-gray-800 hover:bg-blue-50 hover:text-[#0B4FBA]"
                       : "text-gray-300 hover:bg-gray-50"
@@ -239,7 +239,7 @@ export default function CustomDatePicker({
             <button
               type="button"
               onClick={() => handleSelectDay(formatDateToYYYYMMDD(new Date()))}
-              className="text-[#0B4FBA] font-semibold hover:underline"
+              className="text-[#0B4FBA] font-medium hover:underline"
             >
               Select Today
             </button>

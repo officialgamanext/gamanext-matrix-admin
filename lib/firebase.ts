@@ -1133,6 +1133,19 @@ const LOCAL_STORAGE_KEY_WA_MESSAGES = "gamanext_wa_messages";
 
 /* --- CONTACTS --- */
 
+function dedupeContactsList(contacts: WhatsAppContact[]): WhatsAppContact[] {
+  const seenIds = new Set<string>();
+  const seenPhones = new Set<string>();
+  return contacts.filter((c) => {
+    if (c.id && seenIds.has(c.id)) return false;
+    const norm = c.phone ? c.phone.trim().replace(/[\s\-().]/g, "") : "";
+    if (norm && seenPhones.has(norm)) return false;
+    if (c.id) seenIds.add(c.id);
+    if (norm) seenPhones.add(norm);
+    return true;
+  });
+}
+
 export async function getWhatsAppContacts(): Promise<WhatsAppContact[]> {
   try {
     const q = query(collection(db, "whatsapp_contacts"), orderBy("createdAt", "desc"));
@@ -1141,14 +1154,19 @@ export async function getWhatsAppContacts(): Promise<WhatsAppContact[]> {
     snapshot.forEach((docSnap) => {
       contacts.push({ id: docSnap.id, ...docSnap.data() } as WhatsAppContact);
     });
-    return contacts;
+    return dedupeContactsList(contacts);
   } catch (err) {
     console.warn("Firestore WA contacts fetch notice:", err);
   }
   if (typeof window !== "undefined") {
     const data = localStorage.getItem(LOCAL_STORAGE_KEY_WA_CONTACTS);
     if (data) {
-      try { return JSON.parse(data); } catch (e) {}
+      try {
+        const parsed = JSON.parse(data);
+        if (Array.isArray(parsed)) {
+          return dedupeContactsList(parsed);
+        }
+      } catch (e) {}
     }
   }
   return [];
@@ -1166,14 +1184,16 @@ export async function saveWhatsAppContact(contact: WhatsAppContact): Promise<Wha
     const created = { ...item, id: docRef.id };
     if (typeof window !== "undefined") {
       const existing = await getWhatsAppContacts();
-      localStorage.setItem(LOCAL_STORAGE_KEY_WA_CONTACTS, JSON.stringify([created, ...existing]));
+      const deduped = dedupeContactsList([created, ...existing.filter((c) => c.id !== created.id && c.phone !== created.phone)]);
+      localStorage.setItem(LOCAL_STORAGE_KEY_WA_CONTACTS, JSON.stringify(deduped));
     }
     return created;
   } catch (err) {
     const created = { ...item, id: `wac-${Date.now()}` };
     if (typeof window !== "undefined") {
       const existing = await getWhatsAppContacts();
-      localStorage.setItem(LOCAL_STORAGE_KEY_WA_CONTACTS, JSON.stringify([created, ...existing]));
+      const deduped = dedupeContactsList([created, ...existing.filter((c) => c.id !== created.id && c.phone !== created.phone)]);
+      localStorage.setItem(LOCAL_STORAGE_KEY_WA_CONTACTS, JSON.stringify(deduped));
     }
     return created;
   }
@@ -1185,7 +1205,7 @@ export async function updateWhatsAppContact(id: string, data: Partial<WhatsAppCo
   } catch (e) {}
   if (typeof window !== "undefined") {
     const existing = await getWhatsAppContacts();
-    const updated = existing.map((c) => (c.id === id ? { ...c, ...data } : c));
+    const updated = dedupeContactsList(existing.map((c) => (c.id === id ? { ...c, ...data } : c)));
     localStorage.setItem(LOCAL_STORAGE_KEY_WA_CONTACTS, JSON.stringify(updated));
   }
   return true;
@@ -1197,10 +1217,8 @@ export async function deleteWhatsAppContact(id: string): Promise<boolean> {
   } catch (e) {}
   if (typeof window !== "undefined") {
     const existing = await getWhatsAppContacts();
-    localStorage.setItem(
-      LOCAL_STORAGE_KEY_WA_CONTACTS,
-      JSON.stringify(existing.filter((c) => c.id !== id))
-    );
+    const filtered = dedupeContactsList(existing.filter((c) => c.id !== id));
+    localStorage.setItem(LOCAL_STORAGE_KEY_WA_CONTACTS, JSON.stringify(filtered));
   }
   return true;
 }

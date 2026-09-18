@@ -59,7 +59,7 @@ export default function CustomDropdown({
         type="button"
         disabled={disabled}
         onClick={() => setIsOpen(!isOpen)}
-        className={`w-full px-3 py-1.5 text-xs border rounded-lg bg-white flex items-center justify-between transition-all select-none ${
+        className={`w-full px-3 py-1.5 text-xs border rounded-[6px] h-[34px] max-h-[34px] bg-white flex items-center justify-between transition-all select-none ${
           isOpen
             ? "border-[#0B4FBA] ring-2 ring-[#0B4FBA]/20 shadow-xs"
             : "border-gray-300 hover:border-gray-400"
@@ -77,7 +77,7 @@ export default function CustomDropdown({
 
       {/* Custom Options Popover */}
       {isOpen && (
-        <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-50 overflow-hidden animate-in fade-in slide-in-from-top-1 duration-150">
+        <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-[6px] shadow-lg z-50 overflow-hidden animate-in fade-in slide-in-from-top-1 duration-150">
           {/* Optional Search Bar for dropdowns with 5+ options */}
           {normalizedOptions.length > 5 && (
             <div className="p-2 border-b border-gray-100 relative">
@@ -87,7 +87,7 @@ export default function CustomDropdown({
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 placeholder="Search..."
-                className="w-full pl-8 pr-3 py-1 text-xs border border-gray-200 rounded-md outline-none focus:ring-1 focus:ring-[#0B4FBA] bg-gray-50/50"
+                className="w-full pl-8 pr-3 py-1 text-xs border border-gray-200 rounded-[6px] h-[30px] max-h-[34px] outline-none focus:ring-1 focus:ring-[#0B4FBA] bg-gray-50/50"
               />
             </div>
           )}
@@ -107,9 +107,9 @@ export default function CustomDropdown({
                       setIsOpen(false);
                       setSearchTerm("");
                     }}
-                    className={`flex items-center justify-between px-3 py-2 text-xs rounded-lg cursor-pointer transition-colors ${
+                    className={`flex items-center justify-between px-3 py-2 text-xs rounded-[6px] cursor-pointer transition-colors ${
                       isSelected
-                        ? "bg-blue-50 text-[#0B4FBA] font-semibold"
+                        ? "bg-blue-50 text-[#0B4FBA] font-medium"
                         : "text-gray-700 hover:bg-gray-100/70"
                     }`}
                   >

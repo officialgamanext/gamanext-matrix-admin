@@ -529,9 +529,9 @@ function NewChatModal({
                 <p>No contacts found</p>
               </div>
             ) : (
-              filtered.map((c) => (
+              filtered.map((c, idx) => (
                 <button
-                  key={c.id}
+                  key={`${c.id || c.phone || "contact"}-${idx}`}
                   onClick={() => onSelectContact(c)}
                   className="w-full flex items-center space-x-3 p-2.5 rounded-lg hover:bg-blue-50 transition-colors text-left group"
                 >
@@ -550,6 +550,19 @@ function NewChatModal({
       </div>
     </div>
   );
+}
+
+function dedupeContacts(list: WhatsAppContact[]): WhatsAppContact[] {
+  const seenIds = new Set<string>();
+  const seenPhones = new Set<string>();
+  return list.filter((c) => {
+    if (c.id && seenIds.has(c.id)) return false;
+    const norm = c.phone ? normalizePhone(c.phone) : "";
+    if (norm && seenPhones.has(norm)) return false;
+    if (c.id) seenIds.add(c.id);
+    if (norm) seenPhones.add(norm);
+    return true;
+  });
 }
 
 /* ─────────────── Main Page ─────────────── */
@@ -611,8 +624,9 @@ export default function MessagesPage() {
     async function bootstrap() {
       setLoading(true);
       try {
-        const allContacts = await getWhatsAppContacts();
+        const rawContacts = await getWhatsAppContacts();
         if (!mounted) return;
+        const allContacts = dedupeContacts(rawContacts);
         contactsRef.current = allContacts;
         setContacts(allContacts);
       } catch (err) {
@@ -780,7 +794,8 @@ export default function MessagesPage() {
   /* ── Save contact callback ── */
   async function handleContactSaved(c: WhatsAppContact) {
     setActiveContact(c);
-    const updated = await getWhatsAppContacts();
+    const updated = dedupeContacts(await getWhatsAppContacts());
+    contactsRef.current = updated;
     setContacts(updated);
     setShowSaveContact(false);
     // Rebuild conversations with the new contact name
@@ -795,7 +810,8 @@ export default function MessagesPage() {
     setActiveContact(null);
     setShowContactMenu(false);
     setShowDeleteConfirm(false);
-    const updated = await getWhatsAppContacts();
+    const updated = dedupeContacts(await getWhatsAppContacts());
+    contactsRef.current = updated;
     setContacts(updated);
     const allMsgs = await getAllWhatsAppConversations();
     buildConversationList(updated, allMsgs);
@@ -947,9 +963,9 @@ export default function MessagesPage() {
                 <span>SAVED CONTACTS ({contacts.length})</span>
               </div>
               <div className="space-y-0.5 max-h-28 overflow-y-auto">
-                {contacts.map((c) => (
+                {contacts.map((c, idx) => (
                   <button
-                    key={c.id}
+                    key={`${c.id || c.phone || "saved"}-${idx}`}
                     onClick={() => openConversation(c.phone, c)}
                     className="w-full flex items-center space-x-2 px-2 py-1.5 rounded-lg hover:bg-white transition-colors text-left"
                   >
@@ -1113,11 +1129,11 @@ export default function MessagesPage() {
 
                       {/* Messages */}
                       <div className="space-y-2">
-                        {group.msgs.map((msg) => {
+                        {group.msgs.map((msg, mIdx) => {
                           const isOut = msg.direction === "outbound";
                           return (
                             <div
-                              key={msg.id}
+                              key={`${msg.id || "msg"}-${mIdx}`}
                               className={`flex ${isOut ? "justify-end" : "justify-start"}`}
                             >
                               <div
