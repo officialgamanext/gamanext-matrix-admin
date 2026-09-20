@@ -54,7 +54,9 @@ export async function POST(req: NextRequest) {
     const normalizedTo = String(target).replace(/\D/g, "");
 
     const isTextMode = type === "text" && Boolean(message);
-    const finalTemplate = templateName || "message_to_customers";
+    const finalTemplate = templateName || "general_notification";
+    const resolvedLanguageCode =
+      languageCode || (finalTemplate === "general_notification" ? "en" : "en_US");
 
     let finalComponents = components;
 
@@ -67,6 +69,20 @@ export async function POST(req: NextRequest) {
               type: "text",
               text: String(v ?? ""),
             })),
+          },
+        ];
+      } else if (finalTemplate === "general_notification") {
+        const clientName = name || "Customer";
+        const customText = body?.customMessage && String(body.customMessage).trim()
+          ? String(body.customMessage).trim()
+          : "Thank you for being with Gama Next.";
+        finalComponents = [
+          {
+            type: "body",
+            parameters: [
+              { type: "text", text: clientName },
+              { type: "text", text: customText },
+            ],
           },
         ];
       } else if (finalTemplate !== "3p_direct_integration_test_template" && name) {
@@ -93,7 +109,7 @@ export async function POST(req: NextRequest) {
     } = {
       name: finalTemplate,
       language: {
-        code: languageCode || "en_US",
+        code: resolvedLanguageCode,
       },
     };
 

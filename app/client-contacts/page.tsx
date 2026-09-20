@@ -850,10 +850,10 @@ function SendMessageModal({
   onClose: () => void;
   onSent: () => void;
 }) {
-  const [selectedTemplate, setSelectedTemplate] = useState("3p_direct_integration_test_template");
+  const [selectedTemplate, setSelectedTemplate] = useState("general_notification");
   const [customTemplateName, setCustomTemplateName] = useState("");
   const [isCustom, setIsCustom] = useState(false);
-  const [languageCode, setLanguageCode] = useState("en_US");
+  const [languageCode, setLanguageCode] = useState("en");
   const [customMessage, setCustomMessage] = useState("");
   const [sending, setSending] = useState(false);
   const [apiResult, setApiResult] = useState<{ success: boolean; text: string } | null>(null);
@@ -862,14 +862,14 @@ function SendMessageModal({
 
   // Pre-configured preview descriptions
   const getPreviewText = () => {
+    if (activeTemplateName === "general_notification") {
+      return `Hi ${contact.name},\n\n${customMessage.trim() || "[Type your message in the input field below]"}\n\nBest regards,\nTeam Gamanext`;
+    }
     if (activeTemplateName === "3p_direct_integration_test_template") {
       return `Integration Test\n\nWelcome! This is a test message from the WhatsApp Business Platform. You have successfully configured your WhatsApp Business account and completed onboarding. You can now start sending messages to your customers.\n\nWhatsApp Business Platform`;
     }
     if (activeTemplateName === "message_to_customers") {
       return `Missed call\n\nHi ${contact.name}, we missed your call. Please let us know if you're available to reschedule.\n\n[ Reschedule Call ]`;
-    }
-    if (activeTemplateName === "customer_update_notification") {
-      return `Hello ${contact.name}, please note the following update regarding our services: ${customMessage.trim() || "[Type your custom message in the box below]"}. Thank you for your cooperation and support.`;
     }
     if (customMessage.trim()) {
       return `Hi ${contact.name}, ${customMessage.trim()}`;
@@ -896,10 +896,11 @@ function SendMessageModal({
           name: contact.name,
           type: "template",
           templateName: activeTemplateName,
-          languageCode: languageCode || "en_US",
+          languageCode: activeTemplateName === "general_notification" ? "en" : (languageCode || "en_US"),
+          customMessage: customMessage.trim() || undefined,
           variables:
-            activeTemplateName === "customer_update_notification"
-              ? [contact.name, customMessage.trim() || ""]
+            activeTemplateName === "general_notification"
+              ? [contact.name, customMessage.trim() || "Thank you for being with Gama Next."]
               : undefined,
         }),
       });
@@ -988,14 +989,14 @@ function SendMessageModal({
                 } else {
                   setIsCustom(false);
                   setSelectedTemplate(e.target.value);
-                  setLanguageCode(e.target.value === "holiday_notification" ? "en" : "en_US");
+                  setLanguageCode(e.target.value === "general_notification" ? "en" : "en_US");
                 }
               }}
               className="w-full h-[34px] px-2.5 bg-gray-50 border border-gray-300 rounded-[6px] text-xs font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-600"
             >
-              <option value="3p_direct_integration_test_template">3p_direct_integration_test_template (en_US · Live Approved)</option>
+              <option value="general_notification">general_notification (en · Approved · Name &#123;&#123;1&#125;&#125; + Message &#123;&#123;2&#125;&#125;)</option>
+              <option value="3p_direct_integration_test_template">3p_direct_integration_test_template (en_US · System Test)</option>
               <option value="message_to_customers">message_to_customers (en_US · Missed Call Template)</option>
-              <option value="customer_update_notification">customer_update_notification (en_US · Custom Update)</option>
               <option value="custom">Other / Custom Template Name...</option>
             </select>
           </div>
@@ -1034,16 +1035,16 @@ function SendMessageModal({
           <div>
             <div className="flex items-center justify-between mb-1">
               <label className="block text-xs font-medium text-gray-700">
-                Message after {"{{1}}"} (Variable {"{{2}}"})
+                Message (Variable {"{{2}}"}) <span className="text-rose-500">*</span>
               </label>
-              <span className="text-[10px] text-gray-400 font-normal">Optional · For templates with {"{{2}}"}</span>
+              <span className="text-[10px] text-emerald-600 font-medium">Injected into {"{{2}}"}</span>
             </div>
-            <input
-              type="text"
+            <textarea
+              rows={3}
               value={customMessage}
               onChange={(e) => setCustomMessage(e.target.value)}
-              placeholder="e.g. tomorrow is a holiday due to Ganesh Chaturthi. Our team will resume work on Monday."
-              className="w-full h-[34px] px-3 bg-gray-50 border border-gray-300 rounded-[6px] text-xs font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-600 focus:bg-white transition"
+              placeholder="Type your message here (e.g. tomorrow is a holiday due to Ganesh Chaturthi. Our team will resume work on Monday.)..."
+              className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-[6px] text-xs font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-600 focus:bg-white transition resize-none"
             />
           </div>
 
@@ -1058,18 +1059,10 @@ function SendMessageModal({
                 <span>Meta Approved Cloud API Template</span>
               </div>
               <p className="text-gray-900 whitespace-pre-wrap">{getPreviewText()}</p>
-              {activeTemplateName === "message_to_customers" ? (
-                <div className="text-[10px] text-gray-500 mt-2 font-mono">
-                  Static template · No variables in body
-                </div>
-              ) : (
-                <div className="text-[10px] text-gray-500 mt-2 font-mono space-y-0.5">
-                  <div>Variable {"{{1}}"} &rarr; <strong className="text-emerald-700">{contact.name}</strong></div>
-                  {customMessage.trim() && (
-                    <div>Variable {"{{2}}"} &rarr; <strong className="text-emerald-700">{customMessage.trim()}</strong></div>
-                  )}
-                </div>
-              )}
+              <div className="text-[10px] text-gray-500 mt-2 font-mono space-y-0.5">
+                <div>Variable {"{{1}}"} &rarr; <strong className="text-emerald-700">{contact.name}</strong></div>
+                <div>Variable {"{{2}}"} &rarr; <strong className="text-emerald-700">{customMessage.trim() || "[Your message]"}</strong></div>
+              </div>
             </div>
           </div>
 
@@ -1142,8 +1135,8 @@ function BulkSendModal({
     initialSelectedIds.length > 0 ? initialSelectedIds : allContacts.map((c) => c.id || c.phone)
   );
   const [searchTerm, setSearchTerm] = useState("");
-  const [selectedTemplate, setSelectedTemplate] = useState("3p_direct_integration_test_template");
-  const [languageCode, setLanguageCode] = useState("en_US");
+  const [selectedTemplate, setSelectedTemplate] = useState("general_notification");
+  const [languageCode, setLanguageCode] = useState("en");
   const [customMessage, setCustomMessage] = useState("");
 
   const [sending, setSending] = useState(false);
@@ -1206,10 +1199,11 @@ function BulkSendModal({
           name: contact.name,
           type: "template",
           templateName: selectedTemplate,
-          languageCode: languageCode || "en_US",
+          languageCode: selectedTemplate === "general_notification" ? "en" : (languageCode || "en_US"),
+          customMessage: customMessage.trim() || undefined,
           variables:
-            selectedTemplate === "customer_update_notification"
-              ? [contact.name, customMessage.trim() || ""]
+            selectedTemplate === "general_notification"
+              ? [contact.name, customMessage.trim() || "Thank you for being with Gama Next."]
               : undefined,
         };
 
@@ -1411,31 +1405,31 @@ function BulkSendModal({
               value={selectedTemplate}
               onChange={(e) => {
                 setSelectedTemplate(e.target.value);
-                setLanguageCode("en_US");
+                setLanguageCode(e.target.value === "general_notification" ? "en" : "en_US");
               }}
               disabled={sending}
               className="w-full h-[34px] px-2.5 bg-gray-50 border border-gray-300 rounded-[6px] text-xs font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-600"
             >
-              <option value="3p_direct_integration_test_template">3p_direct_integration_test_template (en_US · Live Approved)</option>
+              <option value="general_notification">general_notification (en · Approved · Name &#123;&#123;1&#125;&#125; + Message &#123;&#123;2&#125;&#125;)</option>
+              <option value="3p_direct_integration_test_template">3p_direct_integration_test_template (en_US · System Test)</option>
               <option value="message_to_customers">message_to_customers (en_US · Missed Call Template)</option>
-              <option value="customer_update_notification">customer_update_notification (en_US · Custom Update)</option>
             </select>
 
-            {/* Optional Editable Message after {{1}} (Variable {{2}}) */}
+            {/* Broadcast Message Input for {{2}} */}
             <div>
               <div className="flex items-center justify-between mb-1">
                 <label className="block text-xs font-medium text-gray-700">
-                  Message after {"{{1}}"} (Variable {"{{2}}"})
+                  Broadcast Message (Variable {"{{2}}"}) <span className="text-rose-500">*</span>
                 </label>
-                <span className="text-[10px] text-gray-400 font-normal">Optional · For templates with {"{{2}}"}</span>
+                <span className="text-[10px] text-emerald-600 font-medium">Injected into {"{{2}}"}</span>
               </div>
-              <input
-                type="text"
+              <textarea
+                rows={3}
                 value={customMessage}
                 onChange={(e) => setCustomMessage(e.target.value)}
-                placeholder="e.g. tomorrow is a holiday due to Ganesh Chaturthi. Our team will resume work on Monday."
+                placeholder="Type the message to broadcast to all selected clients..."
                 disabled={sending}
-                className="w-full h-[34px] px-3 bg-gray-50 border border-gray-300 rounded-[6px] text-xs font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-600 focus:bg-white transition"
+                className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-[6px] text-xs font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-600 focus:bg-white transition resize-none"
               />
             </div>
 
@@ -1445,26 +1439,16 @@ function BulkSendModal({
                 <span>Meta Approved Cloud API Template</span>
               </div>
               <p className="text-gray-900 whitespace-pre-wrap">
-                {selectedTemplate === "3p_direct_integration_test_template"
+                {selectedTemplate === "general_notification"
+                  ? `Hi {{Client Name}},\n\n${customMessage.trim() || "[Type your broadcast message in the input above]"}\n\nBest regards,\nTeam Gamanext`
+                  : selectedTemplate === "3p_direct_integration_test_template"
                   ? "Integration Test\n\nWelcome! This is a test message from the WhatsApp Business Platform. You have successfully configured your WhatsApp Business account and completed onboarding. You can now start sending messages to your customers.\n\nWhatsApp Business Platform"
-                  : selectedTemplate === "message_to_customers"
-                  ? "Missed call\n\nHi {{Client Name}}, we missed your call. Please let us know if you're available to reschedule.\n\n[ Reschedule Call ]"
-                  : customMessage.trim()
-                  ? `Hello {{Client Name}}, please note the following update regarding our services: ${customMessage.trim()}. Thank you for your cooperation and support.`
-                  : "Hello {{Client Name}}, please note the following update regarding our services: [Type custom message]. Thank you for your cooperation and support."}
+                  : "Missed call\n\nHi {{Client Name}}, we missed your call. Please let us know if you're available to reschedule.\n\n[ Reschedule Call ]"}
               </p>
-              {selectedTemplate === "message_to_customers" ? (
-                <div className="text-[10px] text-gray-500 mt-2 font-mono">
-                  Static template · No variables in body
-                </div>
-              ) : (
-                <div className="text-[10px] text-gray-500 mt-2 font-mono space-y-0.5">
-                  <div>Variable {"{{1}}"} will be automatically filled with each recipient's name.</div>
-                  {customMessage.trim() && (
-                    <div>Variable {"{{2}}"} will be set to: <strong className="text-emerald-700">{customMessage.trim()}</strong></div>
-                  )}
-                </div>
-              )}
+              <div className="text-[10px] text-gray-500 mt-2 font-mono space-y-0.5">
+                <div>Variable {"{{1}}"} will be automatically filled with each recipient's name.</div>
+                <div>Variable {"{{2}}"} will be set to: <strong className="text-emerald-700">{customMessage.trim() || "[Your message]"}</strong></div>
+              </div>
             </div>
           </div>
 
