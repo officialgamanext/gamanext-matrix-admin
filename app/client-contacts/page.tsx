@@ -951,10 +951,10 @@ function SendMessageModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-[6px] max-w-md w-full overflow-hidden shadow-2xl border border-gray-200 animate-in zoom-in-95">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-2 sm:p-4 md:p-6 overflow-y-auto">
+      <div className="bg-white rounded-[6px] max-w-5xl w-full overflow-hidden shadow-2xl border border-gray-200 my-auto max-h-[92vh] flex flex-col animate-in zoom-in-95">
         {/* Header */}
-        <div className="bg-gradient-to-r from-emerald-700 via-emerald-600 to-teal-700 p-4 text-white flex items-center justify-between">
+        <div className="bg-gradient-to-r from-emerald-700 via-emerald-600 to-teal-700 px-5 py-3 text-white flex items-center justify-between shrink-0">
           <div className="flex items-center space-x-2.5">
             <div className="w-8 h-8 rounded-[6px] bg-white/20 flex items-center justify-center">
               <svg viewBox="0 0 24 24" className="w-4 h-4 fill-current text-white" xmlns="http://www.w3.org/2000/svg">
@@ -974,141 +974,219 @@ function SendMessageModal({
           </button>
         </div>
 
-        {/* Modal Body: Template Selection & Preview */}
-        <div className="p-5 space-y-3.5">
-          {/* Template Selection */}
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">
-              Select Approved Template <span className="text-rose-500">*</span>
-            </label>
-            <select
-              value={isCustom ? "custom" : selectedTemplate}
-              onChange={(e) => {
-                if (e.target.value === "custom") {
-                  setIsCustom(true);
-                } else {
-                  setIsCustom(false);
-                  setSelectedTemplate(e.target.value);
-                  setLanguageCode(e.target.value === "general_notification" ? "en" : "en_US");
-                }
-              }}
-              className="w-full h-[34px] px-2.5 bg-gray-50 border border-gray-300 rounded-[6px] text-xs font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-600"
-            >
-              <option value="general_notification">general_notification (en · Approved · Name &#123;&#123;1&#125;&#125; + Message &#123;&#123;2&#125;&#125;)</option>
-              <option value="3p_direct_integration_test_template">3p_direct_integration_test_template (en_US · System Test)</option>
-              <option value="message_to_customers">message_to_customers (en_US · Missed Call Template)</option>
-              <option value="custom">Other / Custom Template Name...</option>
-            </select>
-          </div>
-
-          {/* Custom Template Name Input if selected */}
-          {isCustom && (
-            <div className="space-y-2">
+        {/* 2-Column Split: Left = Values & Controls, Right = WhatsApp Chat Preview */}
+        <div className="grid grid-cols-1 md:grid-cols-12 divide-y md:divide-y-0 md:divide-x divide-gray-200 overflow-y-auto flex-1">
+          {/* LEFT SIDE: Inputs / Values */}
+          <div className="md:col-span-6 lg:col-span-7 p-5 flex flex-col justify-between space-y-4 overflow-y-auto">
+            <div className="space-y-4">
+              {/* Template Selection */}
               <div>
                 <label className="block text-xs font-medium text-gray-700 mb-1">
-                  Template Name (as in Meta WhatsApp Manager)
+                  Select Approved Template <span className="text-rose-500">*</span>
                 </label>
-                <input
-                  type="text"
-                  value={customTemplateName}
-                  onChange={(e) => setCustomTemplateName(e.target.value)}
-                  placeholder="e.g. holiday_notification"
-                  className="w-full h-[34px] px-3 bg-gray-50 border border-gray-300 rounded-[6px] text-xs font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-600 focus:bg-white transition"
-                />
+                <select
+                  value={isCustom ? "custom" : selectedTemplate}
+                  onChange={(e) => {
+                    if (e.target.value === "custom") {
+                      setIsCustom(true);
+                    } else {
+                      setIsCustom(false);
+                      setSelectedTemplate(e.target.value);
+                      setLanguageCode(e.target.value === "general_notification" ? "en" : "en_US");
+                    }
+                  }}
+                  className="w-full h-[34px] px-2.5 bg-gray-50 border border-gray-300 rounded-[6px] text-xs font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-600"
+                >
+                  <option value="general_notification">general_notification (en · Approved · Name &#123;&#123;1&#125;&#125; + Message &#123;&#123;2&#125;&#125;)</option>
+                  <option value="3p_direct_integration_test_template">3p_direct_integration_test_template (en_US · System Test)</option>
+                  <option value="message_to_customers">message_to_customers (en_US · Missed Call Template)</option>
+                  <option value="custom">Other / Custom Template Name...</option>
+                </select>
               </div>
+
+              {/* Custom Template Name Input if selected */}
+              {isCustom && (
+                <div className="space-y-2">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      Template Name (as in Meta WhatsApp Manager)
+                    </label>
+                    <input
+                      type="text"
+                      value={customTemplateName}
+                      onChange={(e) => setCustomTemplateName(e.target.value)}
+                      placeholder="e.g. holiday_notification"
+                      className="w-full h-[34px] px-3 bg-gray-50 border border-gray-300 rounded-[6px] text-xs font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-600 focus:bg-white transition"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      Language Code
+                    </label>
+                    <input
+                      type="text"
+                      value={languageCode}
+                      onChange={(e) => setLanguageCode(e.target.value)}
+                      placeholder="en_US or en"
+                      className="w-full h-[34px] px-3 bg-gray-50 border border-gray-300 rounded-[6px] text-xs font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-600 focus:bg-white transition"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Recipient variable info */}
+              <div className="p-2.5 bg-gray-50 border border-gray-200 rounded-[6px] text-xs space-y-1">
+                <div className="text-[11px] font-medium text-gray-700 flex items-center justify-between">
+                  <span>Recipient Variable <span className="font-mono text-emerald-700">{"{{1}}"}</span>:</span>
+                  <span className="font-medium text-emerald-700">{contact.name}</span>
+                </div>
+                <div className="text-[11px] text-gray-500">
+                  Automatically set to client name from contact profile.
+                </div>
+              </div>
+
+              {/* Editable Message for {{2}} */}
               <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">
-                  Language Code
-                </label>
-                <input
-                  type="text"
-                  value={languageCode}
-                  onChange={(e) => setLanguageCode(e.target.value)}
-                  placeholder="en_US or en"
-                  className="w-full h-[34px] px-3 bg-gray-50 border border-gray-300 rounded-[6px] text-xs font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-600 focus:bg-white transition"
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-medium text-gray-700">
+                    Message Body (Variable <span className="font-mono text-emerald-700">{"{{2}}"}</span>) <span className="text-rose-500">*</span>
+                  </label>
+                  <span className="text-[10px] text-emerald-600 font-medium">Injected into {"{{2}}"}</span>
+                </div>
+                <textarea
+                  rows={4}
+                  value={customMessage}
+                  onChange={(e) => setCustomMessage(e.target.value)}
+                  placeholder="Type your message here (e.g. tomorrow is a holiday due to Ganesh Chaturthi. Our team will resume work on Monday.)..."
+                  className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-[6px] text-xs font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-600 focus:bg-white transition resize-none leading-relaxed"
                 />
               </div>
-            </div>
-          )}
 
-          {/* Optional Editable Message after {{1}} (Variable {{2}}) */}
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <label className="block text-xs font-medium text-gray-700">
-                Message (Variable {"{{2}}"}) <span className="text-rose-500">*</span>
-              </label>
-              <span className="text-[10px] text-emerald-600 font-medium">Injected into {"{{2}}"}</span>
+              {/* API Result Feedback */}
+              {apiResult && (
+                <div
+                  className={`p-2.5 rounded-[6px] border text-xs flex items-center space-x-2 ${
+                    apiResult.success
+                      ? "bg-emerald-50 border-emerald-200 text-emerald-800"
+                      : "bg-rose-50 border-rose-200 text-rose-800"
+                  }`}
+                >
+                  {apiResult.success ? (
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  ) : (
+                    <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                  )}
+                  <span>{apiResult.text}</span>
+                </div>
+              )}
             </div>
-            <textarea
-              rows={3}
-              value={customMessage}
-              onChange={(e) => setCustomMessage(e.target.value)}
-              placeholder="Type your message here (e.g. tomorrow is a holiday due to Ganesh Chaturthi. Our team will resume work on Monday.)..."
-              className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-[6px] text-xs font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-600 focus:bg-white transition resize-none"
-            />
+
+            {/* Footer Buttons */}
+            <div className="flex items-center justify-end space-x-2 pt-3 border-t border-gray-200">
+              <button
+                type="button"
+                onClick={onClose}
+                className="h-[34px] px-4 border border-gray-300 rounded-[6px] text-xs font-medium text-gray-700 hover:bg-gray-50 transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={sending || !activeTemplateName}
+                onClick={handleSend}
+                className="h-[34px] px-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-[6px] text-xs font-medium shadow-2xs transition disabled:opacity-50 flex items-center space-x-1.5"
+              >
+                {sending ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Sending Template...</span>
+                  </>
+                ) : (
+                  <>
+                    <Send className="w-3.5 h-3.5" />
+                    <span>Send Template</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
 
-          {/* Template Live Preview */}
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">
-              Template Message Preview:
-            </label>
-            <div className="p-3 bg-emerald-50/70 border border-emerald-200 rounded-[6px] text-xs text-gray-800 leading-relaxed font-sans shadow-2xs">
-              <div className="flex items-center space-x-1.5 text-emerald-800 font-medium text-[11px] mb-1">
-                <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
-                <span>Meta Approved Cloud API Template</span>
+          {/* RIGHT SIDE: WhatsApp Chat Preview */}
+          <div className="md:col-span-6 lg:col-span-5 p-5 bg-[#F7F8FA] flex flex-col items-center justify-center overflow-y-auto">
+            <div className="w-full max-w-sm flex flex-col space-y-2.5">
+              <div className="flex items-center justify-between px-1">
+                <span className="text-[11px] font-medium text-gray-500 uppercase tracking-wider flex items-center gap-1">
+                  <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+                  Live Preview
+                </span>
+                <span className="text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-[4px] font-medium font-mono">
+                  {activeTemplateName}
+                </span>
               </div>
-              <p className="text-gray-900 whitespace-pre-wrap">{getPreviewText()}</p>
-              <div className="text-[10px] text-gray-500 mt-2 font-mono space-y-0.5">
-                <div>Variable {"{{1}}"} &rarr; <strong className="text-emerald-700">{contact.name}</strong></div>
-                <div>Variable {"{{2}}"} &rarr; <strong className="text-emerald-700">{customMessage.trim() || "[Your message]"}</strong></div>
+
+              {/* WhatsApp App Mockup */}
+              <div className="w-full rounded-[6px] overflow-hidden shadow-md border border-gray-300 bg-[#ECE5DD] flex flex-col">
+                {/* WhatsApp Chat Topbar */}
+                <div className="bg-[#075E54] text-white px-3 py-2 flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <div className="w-7 h-7 rounded-full bg-white/20 flex items-center justify-center text-xs font-medium text-white">
+                      {contact.name ? contact.name.charAt(0).toUpperCase() : "C"}
+                    </div>
+                    <div>
+                      <div className="text-xs font-medium leading-tight truncate max-w-[150px]">{contact.name}</div>
+                      <div className="text-[10px] text-emerald-200 leading-none mt-0.5">Online</div>
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-2 text-white/80">
+                    <Phone className="w-3.5 h-3.5" />
+                    <Globe className="w-3.5 h-3.5" />
+                  </div>
+                </div>
+
+                {/* WhatsApp Chat Body */}
+                <div className="p-3.5 min-h-[220px] max-h-[320px] overflow-y-auto flex flex-col justify-end space-y-2 bg-[radial-gradient(#0000000a_1px,transparent_1px)] [background-size:12px_12px]">
+                  {/* Encryption Notice */}
+                  <div className="self-center bg-[#FFEECD] text-[#6E5A27] text-[9px] px-2.5 py-1 rounded-[4px] shadow-2xs text-center max-w-[240px] leading-tight font-sans">
+                    🔒 Messages are end-to-end encrypted. Meta Business Cloud.
+                  </div>
+
+                  {/* Message Bubble */}
+                  <div className="self-end bg-[#D9FDD3] text-gray-900 rounded-[6px] rounded-tr-none p-3 text-xs shadow-xs border border-[#C5EDB7] max-w-[92%] space-y-2">
+                    <p className="whitespace-pre-wrap leading-relaxed font-sans text-gray-800">
+                      {getPreviewText()}
+                    </p>
+                    <div className="flex items-center justify-end space-x-1 text-[9px] text-gray-500 pt-0.5">
+                      <span>Just now</span>
+                      <CheckCheck className="w-3.5 h-3.5 text-sky-600" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* WhatsApp Chat Fake Input Bottombar */}
+                <div className="bg-[#F0F2F5] px-2.5 py-1.5 border-t border-gray-200 flex items-center space-x-2">
+                  <div className="flex-1 bg-white h-7 rounded-[4px] px-2.5 text-[11px] text-gray-400 flex items-center border border-gray-200">
+                    Type a message...
+                  </div>
+                  <div className="w-7 h-7 rounded-full bg-[#075E54] flex items-center justify-center text-white">
+                    <Send className="w-3 h-3" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Dynamic Variables Breakdown */}
+              <div className="p-2 bg-white rounded-[6px] border border-gray-200 text-[10px] text-gray-600 space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="font-mono text-emerald-700 font-medium">{"{{1}}"} (Client Name):</span>
+                  <span className="font-medium text-gray-800 truncate max-w-[150px]">{contact.name}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="font-mono text-emerald-700 font-medium">{"{{2}}"} (Message Body):</span>
+                  <span className="font-medium text-emerald-700 truncate max-w-[150px]">
+                    {customMessage.trim() || "[Your message]"}
+                  </span>
+                </div>
               </div>
             </div>
-          </div>
-
-          {apiResult && (
-            <div
-              className={`p-2.5 rounded-[6px] border text-xs flex items-center space-x-2 ${
-                apiResult.success
-                  ? "bg-emerald-50 border-emerald-200 text-emerald-800"
-                  : "bg-rose-50 border-rose-200 text-rose-800"
-              }`}
-            >
-              {apiResult.success ? (
-                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-              ) : (
-                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
-              )}
-              <span>{apiResult.text}</span>
-            </div>
-          )}
-
-          <div className="flex items-center justify-end space-x-2 pt-2 border-t border-gray-100">
-            <button
-              type="button"
-              onClick={onClose}
-              className="h-[34px] px-4 border border-gray-300 rounded-[6px] text-xs font-medium text-gray-700 hover:bg-gray-50 transition"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              disabled={sending || !activeTemplateName}
-              onClick={handleSend}
-              className="h-[34px] px-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-[6px] text-xs font-medium shadow-2xs transition disabled:opacity-50 flex items-center space-x-1.5"
-            >
-              {sending ? (
-                <>
-                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                  <span>Sending Template...</span>
-                </>
-              ) : (
-                <>
-                  <Send className="w-3.5 h-3.5" />
-                  <span>Send Template</span>
-                </>
-              )}
-            </button>
           </div>
         </div>
       </div>
@@ -1284,11 +1362,27 @@ function BulkSendModal({
     }
   };
 
+  const sampleContact = targetContacts[0] || allContacts[0];
+
+  const getBulkPreviewText = () => {
+    const name = sampleContact ? sampleContact.name : "Client Name";
+    if (selectedTemplate === "general_notification") {
+      return `Hi ${name},\n\n${customMessage.trim() || "[Type your broadcast message on the left]"}\n\nBest regards,\nTeam Gamanext`;
+    }
+    if (selectedTemplate === "3p_direct_integration_test_template") {
+      return `Integration Test\n\nWelcome! This is a test message from the WhatsApp Business Platform. You have successfully configured your WhatsApp Business account and completed onboarding. You can now start sending messages to your customers.\n\nWhatsApp Business Platform`;
+    }
+    if (selectedTemplate === "message_to_customers") {
+      return `Missed call\n\nHi ${name}, we missed your call. Please let us know if you're available to reschedule.\n\n[ Reschedule Call ]`;
+    }
+    return `Hi ${name}, ${customMessage.trim() || "[Your message]"}`;
+  };
+
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 overflow-y-auto">
-      <div className="bg-white rounded-[6px] max-w-xl w-full overflow-hidden shadow-2xl border border-gray-200 my-6 animate-in zoom-in-95">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-2 sm:p-4 md:p-6 overflow-y-auto">
+      <div className="bg-white rounded-[6px] max-w-6xl w-full overflow-hidden shadow-2xl border border-gray-200 my-auto max-h-[94vh] flex flex-col animate-in zoom-in-95">
         {/* Header */}
-        <div className="bg-gradient-to-r from-emerald-700 via-teal-700 to-[#0B4FBA] p-4 text-white flex items-center justify-between">
+        <div className="bg-gradient-to-r from-emerald-700 via-teal-700 to-[#0B4FBA] px-5 py-3 text-white flex items-center justify-between shrink-0">
           <div className="flex items-center space-x-2.5">
             <div className="w-8 h-8 rounded-[6px] bg-white/20 flex items-center justify-center">
               <Send className="w-4 h-4" />
@@ -1305,231 +1399,303 @@ function BulkSendModal({
           )}
         </div>
 
-        {/* Modal Body */}
-        <div className="p-5 space-y-4">
-          {/* Recipient Audience Chooser */}
-          <div className="space-y-1.5">
-            <span className="text-xs font-medium text-gray-700">Choose Recipients:</span>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                disabled={sending}
-                onClick={() => setRecipientTarget("all")}
-                className={`p-2.5 rounded-[6px] border text-left transition flex items-center space-x-2.5 ${
-                  recipientTarget === "all"
-                    ? "bg-blue-50 border-[#0B4FBA] text-[#0B4FBA]"
-                    : "bg-white border-gray-200 text-gray-700 hover:bg-gray-50"
-                }`}
-              >
-                <div className="w-7 h-7 rounded-[6px] bg-blue-100 text-[#0B4FBA] flex items-center justify-center font-medium text-xs">
-                  {allContacts.length}
-                </div>
-                <div>
-                  <div className="font-medium text-xs">All Clients</div>
-                  <div className="text-[11px] text-gray-500">{allContacts.length} contacts</div>
-                </div>
-              </button>
+        {/* 2-Column Split: Left = Controls & Inputs, Right = WhatsApp Live Preview */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 divide-y lg:divide-y-0 lg:divide-x divide-gray-200 overflow-y-auto flex-1">
+          {/* LEFT SIDE: Audience, Template, Message & Progress */}
+          <div className="lg:col-span-7 p-5 flex flex-col justify-between space-y-4 overflow-y-auto">
+            <div className="space-y-3.5">
+              {/* Recipient Audience Chooser */}
+              <div className="space-y-1.5">
+                <span className="text-xs font-medium text-gray-700">Choose Recipients:</span>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    disabled={sending}
+                    onClick={() => setRecipientTarget("all")}
+                    className={`p-2.5 rounded-[6px] border text-left transition flex items-center space-x-2.5 ${
+                      recipientTarget === "all"
+                        ? "bg-blue-50 border-[#0B4FBA] text-[#0B4FBA]"
+                        : "bg-white border-gray-200 text-gray-700 hover:bg-gray-50"
+                    }`}
+                  >
+                    <div className="w-7 h-7 rounded-[6px] bg-blue-100 text-[#0B4FBA] flex items-center justify-center font-medium text-xs">
+                      {allContacts.length}
+                    </div>
+                    <div>
+                      <div className="font-medium text-xs">All Clients</div>
+                      <div className="text-[11px] text-gray-500">{allContacts.length} contacts</div>
+                    </div>
+                  </button>
 
-              <button
-                type="button"
-                disabled={sending}
-                onClick={() => setRecipientTarget("selected")}
-                className={`p-2.5 rounded-[6px] border text-left transition flex items-center space-x-2.5 ${
-                  recipientTarget === "selected"
-                    ? "bg-emerald-50 border-emerald-600 text-emerald-800"
-                    : "bg-white border-gray-200 text-gray-700 hover:bg-gray-50"
-                }`}
-              >
-                <div className="w-7 h-7 rounded-[6px] bg-emerald-100 text-emerald-800 flex items-center justify-center font-medium text-xs">
-                  {selectedIds.length}
+                  <button
+                    type="button"
+                    disabled={sending}
+                    onClick={() => setRecipientTarget("selected")}
+                    className={`p-2.5 rounded-[6px] border text-left transition flex items-center space-x-2.5 ${
+                      recipientTarget === "selected"
+                        ? "bg-emerald-50 border-emerald-600 text-emerald-800"
+                        : "bg-white border-gray-200 text-gray-700 hover:bg-gray-50"
+                    }`}
+                  >
+                    <div className="w-7 h-7 rounded-[6px] bg-emerald-100 text-emerald-800 flex items-center justify-center font-medium text-xs">
+                      {selectedIds.length}
+                    </div>
+                    <div>
+                      <div className="font-medium text-xs">Selected Clients</div>
+                      <div className="text-[11px] text-gray-500">{selectedIds.length} chosen</div>
+                    </div>
+                  </button>
                 </div>
-                <div>
-                  <div className="font-medium text-xs">Selected Clients</div>
-                  <div className="text-[11px] text-gray-500">{selectedIds.length} chosen</div>
-                </div>
-              </button>
-            </div>
-          </div>
-
-          {/* If Selected: Client Selection Table */}
-          {recipientTarget === "selected" && (
-            <div className="border border-gray-200 rounded-[6px] p-2.5 bg-gray-50/50 space-y-2">
-              <div className="flex items-center justify-between gap-2">
-                <input
-                  type="text"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder="Filter client list..."
-                  className="h-[34px] px-2.5 bg-white border border-gray-300 rounded-[6px] text-xs w-full max-w-xs focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                />
-                <button
-                  type="button"
-                  onClick={handleSelectAllModal}
-                  className="h-[34px] px-2.5 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-[6px] hover:bg-gray-50 shrink-0 flex items-center"
-                >
-                  {selectedIds.length === allContacts.length ? "Deselect All" : "Select All"}
-                </button>
               </div>
 
-              <div className="max-h-32 overflow-y-auto divide-y divide-gray-100 bg-white rounded-[6px] border border-gray-200 text-xs">
-                {filteredList.map((c) => {
-                  const id = c.id || c.phone;
-                  const isChecked = selectedIds.includes(id);
-
-                  return (
-                    <label
-                      key={id}
-                      className="flex items-center space-x-2 px-2.5 py-1.5 hover:bg-gray-50 cursor-pointer"
+              {/* If Selected: Client Selection Table */}
+              {recipientTarget === "selected" && (
+                <div className="border border-gray-200 rounded-[6px] p-2.5 bg-gray-50/50 space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <input
+                      type="text"
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      placeholder="Filter client list..."
+                      className="h-[34px] px-2.5 bg-white border border-gray-300 rounded-[6px] text-xs w-full max-w-xs focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleSelectAllModal}
+                      className="h-[34px] px-2.5 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-[6px] hover:bg-gray-50 shrink-0 flex items-center"
                     >
-                      <input
-                        type="checkbox"
-                        checked={isChecked}
-                        onChange={() => handleToggle(id)}
-                        className="w-3.5 h-3.5 rounded-[4px] text-emerald-600 focus:ring-emerald-500"
-                      />
-                      <span className="font-medium text-gray-800">{c.name}</span>
-                      <span className="text-gray-500 font-mono text-[11px]">{c.phone}</span>
-                    </label>
-                  );
-                })}
-              </div>
-            </div>
-          )}
+                      {selectedIds.length === allContacts.length ? "Deselect All" : "Select All"}
+                    </button>
+                  </div>
 
-          {/* Template Selection for Broadcast */}
-          <div className="space-y-2">
-            <label className="block text-xs font-medium text-gray-700">
-              Select Approved WhatsApp Template:
-            </label>
-            <select
-              value={selectedTemplate}
-              onChange={(e) => {
-                setSelectedTemplate(e.target.value);
-                setLanguageCode(e.target.value === "general_notification" ? "en" : "en_US");
-              }}
-              disabled={sending}
-              className="w-full h-[34px] px-2.5 bg-gray-50 border border-gray-300 rounded-[6px] text-xs font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-600"
-            >
-              <option value="general_notification">general_notification (en · Approved · Name &#123;&#123;1&#125;&#125; + Message &#123;&#123;2&#125;&#125;)</option>
-              <option value="3p_direct_integration_test_template">3p_direct_integration_test_template (en_US · System Test)</option>
-              <option value="message_to_customers">message_to_customers (en_US · Missed Call Template)</option>
-            </select>
+                  <div className="max-h-28 overflow-y-auto divide-y divide-gray-100 bg-white rounded-[6px] border border-gray-200 text-xs">
+                    {filteredList.map((c) => {
+                      const id = c.id || c.phone;
+                      const isChecked = selectedIds.includes(id);
 
-            {/* Broadcast Message Input for {{2}} */}
-            <div>
-              <div className="flex items-center justify-between mb-1">
+                      return (
+                        <label
+                          key={id}
+                          className="flex items-center space-x-2 px-2.5 py-1.5 hover:bg-gray-50 cursor-pointer"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={() => handleToggle(id)}
+                            className="w-3.5 h-3.5 rounded-[4px] text-emerald-600 focus:ring-emerald-500"
+                          />
+                          <span className="font-medium text-gray-800">{c.name}</span>
+                          <span className="text-gray-500 font-mono text-[11px]">{c.phone}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Template Selection for Broadcast */}
+              <div className="space-y-1">
                 <label className="block text-xs font-medium text-gray-700">
-                  Broadcast Message (Variable {"{{2}}"}) <span className="text-rose-500">*</span>
+                  Select Approved WhatsApp Template:
                 </label>
-                <span className="text-[10px] text-emerald-600 font-medium">Injected into {"{{2}}"}</span>
+                <select
+                  value={selectedTemplate}
+                  onChange={(e) => {
+                    setSelectedTemplate(e.target.value);
+                    setLanguageCode(e.target.value === "general_notification" ? "en" : "en_US");
+                  }}
+                  disabled={sending}
+                  className="w-full h-[34px] px-2.5 bg-gray-50 border border-gray-300 rounded-[6px] text-xs font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-600"
+                >
+                  <option value="general_notification">general_notification (en · Approved · Name &#123;&#123;1&#125;&#125; + Message &#123;&#123;2&#125;&#125;)</option>
+                  <option value="3p_direct_integration_test_template">3p_direct_integration_test_template (en_US · System Test)</option>
+                  <option value="message_to_customers">message_to_customers (en_US · Missed Call Template)</option>
+                </select>
               </div>
-              <textarea
-                rows={3}
-                value={customMessage}
-                onChange={(e) => setCustomMessage(e.target.value)}
-                placeholder="Type the message to broadcast to all selected clients..."
-                disabled={sending}
-                className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-[6px] text-xs font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-600 focus:bg-white transition resize-none"
-              />
+
+              {/* Broadcast Message Input for {{2}} */}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-medium text-gray-700">
+                    Broadcast Message (Variable <span className="font-mono text-emerald-700">{"{{2}}"}</span>) <span className="text-rose-500">*</span>
+                  </label>
+                  <span className="text-[10px] text-emerald-600 font-medium">Injected into {"{{2}}"}</span>
+                </div>
+                <textarea
+                  rows={4}
+                  value={customMessage}
+                  onChange={(e) => setCustomMessage(e.target.value)}
+                  placeholder="Type the message to broadcast to all selected clients..."
+                  disabled={sending}
+                  className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-[6px] text-xs font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-600 focus:bg-white transition resize-none leading-relaxed"
+                />
+              </div>
+
+              {/* Progress / Live status */}
+              {sending && (
+                <div className="space-y-1.5 p-3 bg-gray-50 border border-gray-200 rounded-[6px]">
+                  <div className="flex justify-between text-xs font-medium text-gray-700">
+                    <span>Sending WhatsApp Template Messages...</span>
+                    <span>
+                      {progress.current} / {progress.total}
+                    </span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-[6px] h-2 overflow-hidden">
+                    <div
+                      className="bg-emerald-500 h-2 transition-all duration-300 rounded-[6px]"
+                      style={{
+                        width: `${(progress.current / Math.max(1, progress.total)) * 100}%`,
+                      }}
+                    />
+                  </div>
+                  <div className="flex justify-between text-[11px] text-gray-500">
+                    <span className="text-emerald-600 font-medium">✓ {progress.successes} successful</span>
+                    <span className="text-rose-600 font-medium">✗ {progress.failures} failed</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Completed summary logs */}
+              {!sending && logs.length > 0 && (
+                <div className="p-2.5 bg-gray-50 border border-gray-200 rounded-[6px] space-y-1.5">
+                  <div className="text-xs font-medium text-gray-800 flex items-center justify-between">
+                    <span>Broadcast Summary:</span>
+                    <span className="text-emerald-700 font-medium">
+                      {progress.successes} Sent / {progress.failures} Failed
+                    </span>
+                  </div>
+                  <div className="max-h-24 overflow-y-auto divide-y divide-gray-100 text-xs">
+                    {logs.map((l, idx) => (
+                      <div key={idx} className="py-0.5 flex items-center justify-between">
+                        <span className="text-gray-800 font-medium">{l.name} ({l.phone})</span>
+                        {l.status === "success" ? (
+                          <span className="text-emerald-600 font-medium text-[11px]">✓ Sent</span>
+                        ) : (
+                          <span className="text-rose-600 text-[11px]" title={l.error}>
+                            ✗ {l.error || "Failed"}
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
-            <div className="p-3 bg-emerald-50/70 border border-emerald-200 rounded-[6px] text-xs text-gray-800 leading-relaxed font-sans shadow-2xs">
-              <div className="flex items-center space-x-1.5 text-emerald-800 font-medium text-[11px] mb-1">
-                <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
-                <span>Meta Approved Cloud API Template</span>
-              </div>
-              <p className="text-gray-900 whitespace-pre-wrap">
-                {selectedTemplate === "general_notification"
-                  ? `Hi {{Client Name}},\n\n${customMessage.trim() || "[Type your broadcast message in the input above]"}\n\nBest regards,\nTeam Gamanext`
-                  : selectedTemplate === "3p_direct_integration_test_template"
-                  ? "Integration Test\n\nWelcome! This is a test message from the WhatsApp Business Platform. You have successfully configured your WhatsApp Business account and completed onboarding. You can now start sending messages to your customers.\n\nWhatsApp Business Platform"
-                  : "Missed call\n\nHi {{Client Name}}, we missed your call. Please let us know if you're available to reschedule.\n\n[ Reschedule Call ]"}
-              </p>
-              <div className="text-[10px] text-gray-500 mt-2 font-mono space-y-0.5">
-                <div>Variable {"{{1}}"} will be automatically filled with each recipient's name.</div>
-                <div>Variable {"{{2}}"} will be set to: <strong className="text-emerald-700">{customMessage.trim() || "[Your message]"}</strong></div>
-              </div>
+            {/* Action Buttons */}
+            <div className="flex space-x-2 pt-2 border-t border-gray-200">
+              <button
+                type="button"
+                onClick={onClose}
+                disabled={sending}
+                className="flex-1 h-[34px] border border-gray-300 rounded-[6px] text-xs font-medium text-gray-700 hover:bg-gray-50 transition disabled:opacity-50"
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                onClick={handleExecuteBulkSend}
+                disabled={sending || targetContacts.length === 0}
+                className="flex-1 h-[34px] bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-[6px] text-xs font-medium shadow-2xs transition disabled:opacity-50 flex items-center justify-center space-x-1.5"
+              >
+                {sending ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Broadcasting ({progress.current}/{progress.total})...</span>
+                  </>
+                ) : (
+                  <>
+                    <Send className="w-3.5 h-3.5" />
+                    <span>Send Template to {targetContacts.length} Clients</span>
+                  </>
+                )}
+              </button>
             </div>
           </div>
 
-          {/* Progress / Live status */}
-          {sending && (
-            <div className="space-y-1.5 p-3 bg-gray-50 border border-gray-200 rounded-[6px]">
-              <div className="flex justify-between text-xs font-medium text-gray-700">
-                <span>Sending WhatsApp Template Messages...</span>
-                <span>
-                  {progress.current} / {progress.total}
+          {/* RIGHT SIDE: WhatsApp Chat Preview */}
+          <div className="lg:col-span-5 p-5 bg-[#F7F8FA] flex flex-col items-center justify-center overflow-y-auto">
+            <div className="w-full max-w-sm flex flex-col space-y-2.5">
+              <div className="flex items-center justify-between px-1">
+                <span className="text-[11px] font-medium text-gray-500 uppercase tracking-wider flex items-center gap-1">
+                  <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+                  Live Broadcast Preview
+                </span>
+                <span className="text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-[4px] font-medium font-mono">
+                  {selectedTemplate}
                 </span>
               </div>
-              <div className="w-full bg-gray-200 rounded-[6px] h-2 overflow-hidden">
-                <div
-                  className="bg-emerald-500 h-2 transition-all duration-300 rounded-[6px]"
-                  style={{
-                    width: `${(progress.current / Math.max(1, progress.total)) * 100}%`,
-                  }}
-                />
-              </div>
-              <div className="flex justify-between text-[11px] text-gray-500">
-                <span className="text-emerald-600 font-medium">✓ {progress.successes} successful</span>
-                <span className="text-rose-600 font-medium">✗ {progress.failures} failed</span>
-              </div>
-            </div>
-          )}
 
-          {/* Completed summary logs */}
-          {!sending && logs.length > 0 && (
-            <div className="p-2.5 bg-gray-50 border border-gray-200 rounded-[6px] space-y-1.5">
-              <div className="text-xs font-medium text-gray-800 flex items-center justify-between">
-                <span>Broadcast Summary:</span>
-                <span className="text-emerald-700 font-medium">
-                  {progress.successes} Sent / {progress.failures} Failed
-                </span>
-              </div>
-              <div className="max-h-24 overflow-y-auto divide-y divide-gray-100 text-xs">
-                {logs.map((l, idx) => (
-                  <div key={idx} className="py-0.5 flex items-center justify-between">
-                    <span className="text-gray-800 font-medium">{l.name} ({l.phone})</span>
-                    {l.status === "success" ? (
-                      <span className="text-emerald-600 font-medium text-[11px]">✓ Sent</span>
-                    ) : (
-                      <span className="text-rose-600 text-[11px]" title={l.error}>
-                        ✗ {l.error || "Failed"}
-                      </span>
-                    )}
+              {/* WhatsApp App Mockup */}
+              <div className="w-full rounded-[6px] overflow-hidden shadow-md border border-gray-300 bg-[#ECE5DD] flex flex-col">
+                {/* WhatsApp Chat Topbar */}
+                <div className="bg-[#075E54] text-white px-3 py-2 flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <div className="w-7 h-7 rounded-full bg-white/20 flex items-center justify-center text-xs font-medium text-white">
+                      {sampleContact ? sampleContact.name.charAt(0).toUpperCase() : "C"}
+                    </div>
+                    <div>
+                      <div className="text-xs font-medium leading-tight truncate max-w-[150px]">
+                        {sampleContact ? sampleContact.name : "Recipient Sample"}
+                      </div>
+                      <div className="text-[10px] text-emerald-200 leading-none mt-0.5">
+                        {sampleContact ? sampleContact.phone : "+91..."}
+                      </div>
+                    </div>
                   </div>
-                ))}
+                  <div className="flex items-center space-x-2 text-white/80">
+                    <Phone className="w-3.5 h-3.5" />
+                    <Globe className="w-3.5 h-3.5" />
+                  </div>
+                </div>
+
+                {/* WhatsApp Chat Body */}
+                <div className="p-3.5 min-h-[220px] max-h-[320px] overflow-y-auto flex flex-col justify-end space-y-2 bg-[radial-gradient(#0000000a_1px,transparent_1px)] [background-size:12px_12px]">
+                  {/* Encryption Notice */}
+                  <div className="self-center bg-[#FFEECD] text-[#6E5A27] text-[9px] px-2.5 py-1 rounded-[4px] shadow-2xs text-center max-w-[240px] leading-tight font-sans">
+                    🔒 Messages are end-to-end encrypted. Meta Business Cloud.
+                  </div>
+
+                  {/* Message Bubble */}
+                  <div className="self-end bg-[#D9FDD3] text-gray-900 rounded-[6px] rounded-tr-none p-3 text-xs shadow-xs border border-[#C5EDB7] max-w-[92%] space-y-2">
+                    <p className="whitespace-pre-wrap leading-relaxed font-sans text-gray-800">
+                      {getBulkPreviewText()}
+                    </p>
+                    <div className="flex items-center justify-end space-x-1 text-[9px] text-gray-500 pt-0.5">
+                      <span>Just now</span>
+                      <CheckCheck className="w-3.5 h-3.5 text-sky-600" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* WhatsApp Chat Fake Input Bottombar */}
+                <div className="bg-[#F0F2F5] px-2.5 py-1.5 border-t border-gray-200 flex items-center space-x-2">
+                  <div className="flex-1 bg-white h-7 rounded-[4px] px-2.5 text-[11px] text-gray-400 flex items-center border border-gray-200">
+                    Type a message...
+                  </div>
+                  <div className="w-7 h-7 rounded-full bg-[#075E54] flex items-center justify-center text-white">
+                    <Send className="w-3 h-3" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Dynamic Variables Breakdown */}
+              <div className="p-2.5 bg-white rounded-[6px] border border-gray-200 text-[10px] text-gray-600 space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="font-mono text-emerald-700 font-medium">{"{{1}}"} (Client Name):</span>
+                  <span className="font-medium text-gray-800 truncate max-w-[150px]">Auto-filled per recipient</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="font-mono text-emerald-700 font-medium">{"{{2}}"} (Broadcast Body):</span>
+                  <span className="font-medium text-emerald-700 truncate max-w-[150px]">
+                    {customMessage.trim() || "[Your broadcast text]"}
+                  </span>
+                </div>
+                <div className="text-[10px] text-gray-500 pt-1 border-t border-gray-100">
+                  Broadcast will be delivered to <strong className="text-gray-800 font-medium">{targetContacts.length}</strong> clients individually.
+                </div>
               </div>
             </div>
-          )}
-
-          {/* Action Buttons */}
-          <div className="flex space-x-2 pt-1">
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={sending}
-              className="flex-1 h-[34px] border border-gray-300 rounded-[6px] text-xs font-medium text-gray-700 hover:bg-gray-50 transition disabled:opacity-50"
-            >
-              Close
-            </button>
-            <button
-              type="button"
-              onClick={handleExecuteBulkSend}
-              disabled={sending || targetContacts.length === 0}
-              className="flex-1 h-[34px] bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-[6px] text-xs font-medium shadow-2xs transition disabled:opacity-50 flex items-center justify-center space-x-1.5"
-            >
-              {sending ? (
-                <>
-                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                  <span>Broadcasting ({progress.current}/{progress.total})...</span>
-                </>
-              ) : (
-                <>
-                  <Send className="w-3.5 h-3.5" />
-                  <span>Send Template to {targetContacts.length} Clients</span>
-                </>
-              )}
-            </button>
           </div>
         </div>
       </div>
