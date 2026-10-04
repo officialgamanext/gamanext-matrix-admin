@@ -1784,10 +1784,10 @@ export default function CustomerDetailPage({
 
       {/* PRINTABLE INVOICE PREVIEW MODAL */}
       {previewInvoice && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto print:static print:inset-auto print:p-0 print:m-0 print:bg-white print:backdrop-blur-none print:overflow-visible">
-          <div className="bg-white rounded-xl shadow-2xl border border-gray-300 w-full max-w-4xl overflow-hidden my-8 animate-in fade-in print:shadow-none print:border-none print:max-w-none print:w-full print:m-0 print:rounded-none print:max-h-none print:overflow-visible print:transform-none">
-            {/* Modal Header Bar (Hidden during Print) */}
-            <div className="flex items-center justify-between px-6 py-3 bg-gray-900 text-white select-none print:hidden">
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex flex-col items-center justify-start p-2 sm:p-4 overflow-y-auto print:static print:inset-auto print:p-0 print:m-0 print:bg-white print:backdrop-blur-none print:overflow-visible">
+          <div className="bg-white rounded-xl shadow-2xl border border-gray-300 w-full max-w-4xl my-2 sm:my-6 overflow-hidden flex flex-col max-h-[92vh] animate-in fade-in print:max-h-none print:my-0 print:shadow-none print:border-none print:max-w-none print:w-full print:m-0 print:rounded-none print:overflow-visible print:transform-none">
+            {/* Modal Header Bar (Always visible & Sticky at Top) */}
+            <div className="sticky top-0 z-30 shrink-0 flex items-center justify-between px-6 py-3 bg-gray-900 text-white select-none shadow-md print:hidden">
               <div className="flex items-center space-x-2">
                 <Receipt className="w-4 h-4 text-emerald-400" />
                 <span className="text-xs font-bold">Printable Tax Invoice - #{previewInvoice.invoiceNumber}</span>
@@ -1820,7 +1820,7 @@ export default function CustomerDetailPage({
             </div>
 
             {/* Printable Invoice Container */}
-            <div id="printable-invoice" className="p-8 sm:p-10 bg-white text-gray-900 space-y-5 text-xs font-sans print:m-0">
+            <div id="printable-invoice" className="p-8 sm:p-10 bg-white text-gray-900 space-y-5 text-xs font-sans overflow-y-auto flex-1 print:overflow-visible print:m-0">
               {/* TOP HEADER */}
               <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
                 <div>
