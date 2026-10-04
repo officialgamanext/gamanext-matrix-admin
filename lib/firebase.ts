@@ -1515,6 +1515,8 @@ export interface CustomerInvoice {
   total: number;
   notes?: string;
   terms?: string;
+  pdfUrl?: string;
+  pdfPublicId?: string;
   createdAt?: string;
 }
 

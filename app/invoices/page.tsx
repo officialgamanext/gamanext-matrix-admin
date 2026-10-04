@@ -42,7 +42,13 @@ import {
   Calendar,
   ChevronLeft,
   ChevronRight,
+  Download,
+  RotateCw,
+  Loader2,
+  Sparkles,
 } from "lucide-react";
+import PrintableInvoice from "../components/PrintableInvoice";
+import { generateAndUploadInvoicePdf, downloadInvoicePdf } from "@/lib/invoicePdf";
 
 export default function InvoicesPage() {
   const [invoices, setInvoices] = useState<CustomerInvoice[]>([]);
@@ -53,6 +59,11 @@ export default function InvoicesPage() {
   const [statusFilter, setStatusFilter] = useState<string>("All");
   const [currentPage, setCurrentPage] = useState(1);
   const PAGE_SIZE = 24;
+
+  // Cloudinary PDF Generation States
+  const [generatingId, setGeneratingId] = useState<string | null>(null);
+  const [invoiceToRender, setInvoiceToRender] = useState<CustomerInvoice | null>(null);
+  const [generateStatus, setGenerateStatus] = useState<string | null>(null);
 
   // Modals
   const [previewInvoice, setPreviewInvoice] = useState<CustomerInvoice | null>(null);
@@ -205,6 +216,72 @@ export default function InvoicesPage() {
     window.addEventListener("afterprint", restoreTitle);
     window.print();
     setTimeout(restoreTitle, 2000);
+  };
+
+  const handleGeneratePdf = async (inv: CustomerInvoice) => {
+    if (generatingId) return;
+    const invId = inv.id || "current";
+    setGeneratingId(invId);
+    setGenerateStatus("Generating PDF...");
+
+    try {
+      let targetEl: HTMLElement | null = null;
+
+      if (previewInvoice && previewInvoice.id === inv.id) {
+        targetEl = document.getElementById("printable-invoice");
+      } else {
+        setInvoiceToRender(inv);
+        // Allow the off-screen invoice container to render
+        await new Promise((resolve) => setTimeout(resolve, 300));
+        targetEl = document.getElementById("hidden-printable-invoice");
+      }
+
+      if (!targetEl) {
+        throw new Error("Unable to locate invoice document for PDF export.");
+      }
+
+      setGenerateStatus("Uploading to Cloudinary...");
+      const { secureUrl, publicId } = await generateAndUploadInvoicePdf(inv, targetEl);
+
+      const updatedInv: CustomerInvoice = {
+        ...inv,
+        pdfUrl: secureUrl,
+        pdfPublicId: publicId,
+      };
+
+      await saveCustomerInvoiceToStorage(updatedInv);
+
+      setInvoices((prev) =>
+        prev.map((item) => (item.id === inv.id ? updatedInv : item))
+      );
+
+      if (previewInvoice && previewInvoice.id === inv.id) {
+        setPreviewInvoice(updatedInv);
+      }
+
+      setGenerateStatus("Saved!");
+      setTimeout(() => setGenerateStatus(null), 2500);
+    } catch (err: any) {
+      console.error("PDF generation/upload failed:", err);
+      alert(`Error generating PDF: ${err.message || err}`);
+    } finally {
+      setGeneratingId(null);
+      setInvoiceToRender(null);
+    }
+  };
+
+  const handleDownloadPdf = async (inv: CustomerInvoice) => {
+    if (!inv.pdfUrl) {
+      alert("No generated PDF found. Please generate the PDF first.");
+      return;
+    }
+    const rawBusinessName =
+      inv.customerDetails?.businessName ||
+      inv.customerDetails?.name ||
+      "Client";
+    const cleanBusinessName = rawBusinessName.replace(/\s+/g, "");
+    const filename = `${cleanBusinessName}-${inv.invoiceNumber || "INV"}`;
+    await downloadInvoicePdf(inv.pdfUrl, filename);
   };
 
   const openWhatsappModal = (inv: CustomerInvoice) => {
@@ -678,6 +755,50 @@ export default function InvoicesPage() {
                   </div>
 
                   <div className="flex items-center space-x-1.5 pl-3 border-l border-gray-200">
+                    {inv.pdfUrl ? (
+                      <div className="flex items-center space-x-1">
+                        <button
+                          onClick={() => handleDownloadPdf(inv)}
+                          className="px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-semibold rounded-lg transition-colors flex items-center space-x-1 shadow-2xs"
+                          title="Download Invoice PDF"
+                        >
+                          <Download className="w-3.5 h-3.5" />
+                          <span>Download</span>
+                        </button>
+                        <button
+                          onClick={() => handleGeneratePdf(inv)}
+                          disabled={generatingId === inv.id}
+                          className="p-1.5 text-gray-400 hover:text-[#0B4FBA] hover:bg-blue-50 rounded-lg transition-colors"
+                          title="Regenerate PDF in Cloudinary"
+                        >
+                          <RotateCw
+                            className={`w-3.5 h-3.5 ${
+                              generatingId === inv.id ? "animate-spin text-[#0B4FBA]" : ""
+                            }`}
+                          />
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => handleGeneratePdf(inv)}
+                        disabled={generatingId === inv.id}
+                        className="px-2.5 py-1.5 bg-[#0B4FBA] hover:bg-[#083c8d] text-white text-xs font-semibold rounded-lg transition-colors flex items-center space-x-1.5 disabled:opacity-60 shadow-2xs"
+                        title="Generate PDF & Save to Cloudinary"
+                      >
+                        {generatingId === inv.id ? (
+                          <>
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            <span>Generating...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Sparkles className="w-3.5 h-3.5" />
+                            <span>Generate</span>
+                          </>
+                        )}
+                      </button>
+                    )}
+
                     <button
                       onClick={() => setPreviewInvoice(inv)}
                       className="p-2 text-[#0B4FBA] bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors flex items-center justify-center"
@@ -1247,8 +1368,58 @@ export default function InvoicesPage() {
               <div className="flex items-center space-x-2">
                 <Receipt className="w-4 h-4 text-emerald-400" />
                 <span className="text-xs font-bold">Printable Tax Invoice - #{previewInvoice.invoiceNumber}</span>
+                {previewInvoice.pdfUrl && (
+                  <span className="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded-full font-medium ml-2">
+                    PDF Ready
+                  </span>
+                )}
               </div>
               <div className="flex items-center space-x-2">
+                {/* Cloudinary PDF Generation / Download Controls */}
+                {previewInvoice.pdfUrl ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => handleDownloadPdf(previewInvoice)}
+                      className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-md flex items-center space-x-1.5 transition shadow-xs"
+                      title="Download Invoice PDF"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      <span>Download PDF</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleGeneratePdf(previewInvoice)}
+                      disabled={Boolean(generatingId)}
+                      className="px-2.5 py-1 bg-gray-800 hover:bg-gray-700 text-gray-200 text-xs font-medium rounded-md flex items-center space-x-1 transition disabled:opacity-50"
+                      title="Regenerate PDF in Cloudinary"
+                    >
+                      <RotateCw className={`w-3.5 h-3.5 ${generatingId ? "animate-spin" : ""}`} />
+                      <span>{generatingId ? "Generating..." : "Regenerate"}</span>
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => handleGeneratePdf(previewInvoice)}
+                    disabled={Boolean(generatingId)}
+                    className="px-3 py-1 bg-[#0B4FBA] hover:bg-[#083c8d] text-white text-xs font-semibold rounded-md flex items-center space-x-1.5 transition shadow-xs disabled:opacity-50"
+                    title="Generate PDF and upload to Cloudinary"
+                  >
+                    {generatingId ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        <span>{generateStatus || "Generating..."}</span>
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-3.5 h-3.5" />
+                        <span>Generate PDF</span>
+                      </>
+                    )}
+                  </button>
+                )}
+
                 <button
                   type="button"
                   onClick={() => handlePrintInvoice(previewInvoice)}
@@ -1275,287 +1446,16 @@ export default function InvoicesPage() {
               </div>
             </div>
 
-            {/* Printable Invoice Container */}
-            <div id="printable-invoice" className="p-8 sm:p-10 bg-white text-gray-900 space-y-5 text-xs font-sans overflow-y-auto flex-1 print:overflow-visible print:m-0">
-              {/* TOP HEADER */}
-              <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
-                <div>
-                  <div className="mb-2">
-                    <img
-                      src="/logo.jpeg"
-                      alt="Logo"
-                      className="h-16 w-auto object-contain"
-                    />
-                  </div>
-                  <h1 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight">
-                    {previewInvoice.myCompanyDetails.companyName || "Gamanext Software Solutions"}
-                  </h1>
-                  <p className="text-xs text-gray-500 max-w-sm mt-0.5 leading-relaxed">
-                    {previewInvoice.myCompanyDetails.address}
-                  </p>
-                  <div className="mt-2 text-xs space-y-0.5 text-gray-700">
-                    <div>
-                      <span className="font-semibold text-gray-900">GSTIN:</span> {previewInvoice.myCompanyDetails.gstin}
-                    </div>
-                    <div>
-                      <span className="font-semibold text-gray-900">Email:</span> {previewInvoice.myCompanyDetails.email}
-                    </div>
-                    <div>
-                      <span className="font-semibold text-gray-900">Phone:</span> {previewInvoice.myCompanyDetails.phone}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="text-left sm:text-right shrink-0">
-                  <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-[#0B4FBA] uppercase">
-                    TAX INVOICE
-                  </h2>
-                  <div className="mt-2 space-y-1 text-xs">
-                    <div className="flex justify-start sm:justify-end space-x-2">
-                      <span className="text-gray-500">Invoice No:</span>
-                      <span className="font-bold text-gray-900 font-mono">{previewInvoice.invoiceNumber}</span>
-                    </div>
-                    <div className="flex justify-start sm:justify-end space-x-2">
-                      <span className="text-gray-500">Date:</span>
-                      <span className="font-semibold text-gray-800">{previewInvoice.issueDate}</span>
-                    </div>
-                    <div className="flex justify-start sm:justify-end space-x-2">
-                      <span className="text-gray-500">Due Date:</span>
-                      <span className="font-semibold text-gray-800">{previewInvoice.dueDate}</span>
-                    </div>
-                    {previewInvoice.poNumber && (
-                      <div className="flex justify-start sm:justify-end space-x-2">
-                        <span className="text-gray-500">PO Number:</span>
-                        <span className="font-semibold text-gray-800 font-mono">{previewInvoice.poNumber}</span>
-                      </div>
-                    )}
-                    <div className="flex justify-start sm:justify-end pt-1">
-                      <span className="inline-block bg-emerald-100 text-emerald-700 text-xs font-semibold px-3 py-0.5 rounded-full">
-                        Status: {previewInvoice.status}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* THIN DIVIDER */}
-              <div className="border-b border-gray-200"></div>
-
-              {/* BILLED TO (CLIENT DETAILS) BOX */}
-              <div className="border border-gray-200 rounded-xl p-4 bg-white">
-                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1.5">
-                  BILLED TO (CLIENT DETAILS)
-                </span>
-                <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 text-xs">
-                  <div>
-                    <h3 className="text-sm font-bold text-gray-900">
-                      {previewInvoice.customerDetails.businessName || previewInvoice.customerDetails.name}
-                    </h3>
-                    <p className="text-xs text-gray-700 font-medium">
-                      {previewInvoice.customerDetails.name}
-                    </p>
-                    <p className="text-xs text-gray-500 mt-1 leading-relaxed max-w-sm">
-                      {previewInvoice.customerDetails.address}
-                    </p>
-                  </div>
-                  <div className="text-left sm:text-right space-y-1">
-                    <div>
-                      <span className="text-gray-500">Phone: </span>
-                      <span className="font-bold text-gray-900 font-mono">{previewInvoice.customerDetails.mobileNumber}</span>
-                    </div>
-                    {previewInvoice.customerDetails.gstin && (
-                      <div>
-                        <span className="text-gray-500">GSTIN: </span>
-                        <span className="font-bold text-gray-900 font-mono">{previewInvoice.customerDetails.gstin}</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* ITEMS TABLE */}
-              <div className="border border-gray-200 rounded-xl overflow-hidden">
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="bg-[#0B4FBA] text-white text-xs font-semibold">
-                      <th className="py-2.5 px-3 text-center w-12 text-white font-semibold">#</th>
-                      <th className="py-2.5 px-3 text-white font-semibold">Item Description</th>
-                      <th className="py-2.5 px-3 text-center w-24 text-white font-semibold">HSN/SAC</th>
-                      <th className="py-2.5 px-3 text-center w-16 text-white font-semibold">Qty</th>
-                      <th className="py-2.5 px-3 text-right w-28 text-white font-semibold">Rate (₹)</th>
-                      <th className="py-2.5 px-3 text-right w-28 text-white font-semibold">Amount (₹)</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100 text-xs">
-                    {previewInvoice.items.map((item, idx) => (
-                      <tr key={idx} className="hover:bg-gray-50/50">
-                        <td className="py-3 px-3 text-center text-gray-400 font-medium">{idx + 1}</td>
-                        <td className="py-3 px-3 font-bold text-gray-900 whitespace-pre-line">{item.description}</td>
-                        <td className="py-3 px-3 text-center text-gray-600 font-medium">{item.hsnSac || "-"}</td>
-                        <td className="py-3 px-3 text-center font-bold text-gray-900">{item.quantity}</td>
-                        <td className="py-3 px-3 text-right text-gray-800 font-medium">
-                          {item.unitPrice.toLocaleString("en-IN")}
-                        </td>
-                        <td className="py-3 px-3 text-right font-bold text-gray-900">
-                          {item.amount.toLocaleString("en-IN")}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* MIDDLE SECTION: BANK DETAILS (LEFT) & TOTALS (RIGHT) */}
-              <div className="flex flex-col sm:flex-row justify-between items-start gap-6 pt-2">
-                {/* Bank Account & Payment Details Card */}
-                <div className="flex-1 w-full border border-gray-200 rounded-xl p-4 bg-white space-y-3">
-                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">
-                    BANK & PAYMENT DETAILS
-                  </span>
-                  <div className="grid grid-cols-2 gap-y-2 gap-x-4 text-xs">
-                    <div>
-                      <span className="text-gray-500 block text-[11px]">Bank Name:</span>
-                      <span className="font-bold text-gray-900">
-                        {previewInvoice.myCompanyDetails.bankName || "Federal Bank"}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-gray-500 block text-[11px]">Account Name:</span>
-                      <span className="font-bold text-gray-900">
-                        {previewInvoice.myCompanyDetails.accountName || previewInvoice.myCompanyDetails.companyName}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-gray-500 block text-[11px]">Account Number:</span>
-                      <span className="font-bold font-mono text-gray-900">
-                        {previewInvoice.myCompanyDetails.accountNumber || "25790200002555"}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-gray-500 block text-[11px]">IFSC Code:</span>
-                      <span className="font-bold font-mono text-gray-900">
-                        {previewInvoice.myCompanyDetails.ifscCode || "FDRL0002579"}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-gray-500 block text-[11px]">Branch:</span>
-                      <span className="font-bold text-gray-900">
-                        {previewInvoice.myCompanyDetails.branch || "Vedayapalem, Nellore"}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-gray-500 block text-[11px]">UPI ID:</span>
-                      <span className="font-bold font-mono text-[#0B4FBA]">
-                        {previewInvoice.myCompanyDetails.upiId || "gamanext2555qr@fbl"}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="pt-2 border-t border-gray-100 flex items-center space-x-3">
-                    <img
-                      src={
-                        previewInvoice.myCompanyDetails.upiQrCodeUrl ||
-                        `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(
-                          `upi://pay?pa=${previewInvoice.myCompanyDetails.upiId || "gamanext2555qr@fbl"}&pn=${
-                            previewInvoice.myCompanyDetails.companyName || "Gamanext Software Solutions"
-                          }&cu=INR`
-                        )}`
-                      }
-                      alt="UPI QR Code"
-                      className="w-16 h-16 rounded border border-gray-200 p-0.5 object-contain bg-white"
-                    />
-                    <span className="text-[10px] text-gray-500 leading-snug">
-                      Scan QR Code to pay directly via any UPI app.
-                    </span>
-                  </div>
-                </div>
-
-                {/* Subtotals & Taxes */}
-                <div className="w-full sm:w-80 shrink-0 space-y-2 text-xs">
-                  <div className="flex justify-between py-1 text-gray-600">
-                    <span>Subtotal:</span>
-                    <span className="font-bold font-mono text-gray-900">
-                      ₹{previewInvoice.subtotal.toLocaleString("en-IN")}
-                    </span>
-                  </div>
-                  {previewInvoice.cgstRate !== undefined && previewInvoice.cgstRate > 0 && (
-                    <div className="flex justify-between py-1 text-gray-600">
-                      <span>CGST ({previewInvoice.cgstRate}%):</span>
-                      <span className="font-bold font-mono text-gray-900">
-                        ₹{(previewInvoice.cgstAmount || 0).toLocaleString("en-IN")}
-                      </span>
-                    </div>
-                  )}
-                  {previewInvoice.sgstRate !== undefined && previewInvoice.sgstRate > 0 && (
-                    <div className="flex justify-between py-1 text-gray-600">
-                      <span>SGST ({previewInvoice.sgstRate}%):</span>
-                      <span className="font-bold font-mono text-gray-900">
-                        ₹{(previewInvoice.sgstAmount || 0).toLocaleString("en-IN")}
-                      </span>
-                    </div>
-                  )}
-                  {previewInvoice.discount !== undefined && previewInvoice.discount > 0 && (
-                    <div className="flex justify-between py-1 text-emerald-600">
-                      <span>Discount:</span>
-                      <span className="font-bold font-mono">-₹{previewInvoice.discount.toLocaleString("en-IN")}</span>
-                    </div>
-                  )}
-
-                  {/* THICK SOLID BLACK LINE */}
-                  <div className="border-t-2 border-gray-900 my-2"></div>
-
-                  <div className="flex justify-between items-center py-1">
-                    <span className="font-bold text-gray-900 text-sm">Grand Total:</span>
-                    <span className="text-xl font-bold font-mono text-[#0B4FBA]">
-                      ₹{previewInvoice.total.toLocaleString("en-IN")}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* FOOTER SECTION: NOTES & TERMS (LEFT) & SIGNATURE (RIGHT) */}
-              <div className="pt-6 flex flex-col sm:flex-row justify-between items-end gap-6 text-xs">
-                <div className="max-w-md space-y-3">
-                  {previewInvoice.notes && (
-                    <div>
-                      <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-0.5">
-                        NOTES
-                      </span>
-                      <p className="text-xs text-gray-600 whitespace-pre-line leading-relaxed">
-                        {previewInvoice.notes}
-                      </p>
-                    </div>
-                  )}
-                  <div>
-                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-0.5">
-                      TERMS & CONDITIONS
-                    </span>
-                    <p className="text-[11px] text-gray-500 whitespace-pre-line leading-relaxed">
-                      {previewInvoice.terms ||
-                        "• Payment is due within 30 days from the invoice date.\n• Late payments may be subject to a 2% monthly interest charge.\n• All disputes are subject to Bengaluru jurisdiction."}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="text-right shrink-0">
-                  <span className="text-xs text-gray-600 font-medium block">
-                    For {previewInvoice.myCompanyDetails.companyName || "Gamanext Software Solutions"}
-                  </span>
-                  <div className="h-16 flex items-center justify-end my-1">
-                    <img
-                      src="/signature.PNG"
-                      alt="Authorized Signature"
-                      className="h-14 w-auto object-contain"
-                    />
-                  </div>
-                  <div className="border-b border-gray-300 w-52 ml-auto my-1"></div>
-                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">
-                    AUTHORIZED SIGNATORY
-                  </span>
-                </div>
-              </div>
-            </div>
+            {/* Printable Invoice Component */}
+            <PrintableInvoice invoice={previewInvoice} id="printable-invoice" />
           </div>
+        </div>
+      )}
+
+      {/* Hidden Off-Screen Invoice Container for Instant PDF Generation */}
+      {invoiceToRender && (
+        <div className="fixed left-[-9999px] top-0 pointer-events-none z-[-100] w-[800px] bg-white">
+          <PrintableInvoice invoice={invoiceToRender} id="hidden-printable-invoice" />
         </div>
       )}
 
