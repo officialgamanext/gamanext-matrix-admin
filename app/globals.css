@@ -172,10 +172,9 @@ select:disabled,
 /* PRINT STYLES FOR TAX INVOICES & PDF GENERATION                             */
 /* ========================================================================== */
 @media print {
-  /* Remove browser headers (date, URL) & footers (page numbers) */
   @page {
     size: A4 portrait;
-    margin: 0 !important;
+    margin: 10mm;
   }
 
   html,
@@ -183,6 +182,10 @@ select:disabled,
     margin: 0 !important;
     padding: 0 !important;
     background: #ffffff !important;
+    color: #000000 !important;
+    height: auto !important;
+    min-height: 100% !important;
+    overflow: visible !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
@@ -200,9 +203,34 @@ select:disabled,
     visibility: hidden !important;
   }
 
+  /* Neutralize all modal wrappers and overlays during print so they don't clip or trap the content */
+  .fixed,
+  [class*="fixed"],
+  [class*="backdrop-blur"],
+  [class*="animate-in"] {
+    position: static !important;
+    inset: auto !important;
+    background: transparent !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    filter: none !important;
+    transform: none !important;
+    animation: none !important;
+    overflow: visible !important;
+    max-height: none !important;
+    max-width: 100% !important;
+    width: 100% !important;
+    box-shadow: none !important;
+    border: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
   /* Make printable invoice container and its contents visible */
   #printable-invoice,
   #printable-invoice *,
+  #printable-tax-invoice,
+  #printable-tax-invoice *,
   #printable-payslip,
   #printable-payslip * {
     visibility: visible !important;
@@ -210,59 +238,64 @@ select:disabled,
 
   /* Position container flush at top-left of printable page */
   #printable-invoice,
+  #printable-tax-invoice,
   #printable-payslip {
-    position: fixed !important;
+    position: absolute !important;
     left: 0 !important;
     top: 0 !important;
     width: 100% !important;
     max-width: 100% !important;
     margin: 0 !important;
-    padding: 8mm 12mm !important;
+    padding: 0 !important;
     border: none !important;
     box-shadow: none !important;
     background-color: #ffffff !important;
     box-sizing: border-box !important;
+    z-index: 9999999 !important;
+    display: block !important;
   }
 
-  /* Ensure grid and flex layout stay side-by-side in print mode */
-  #printable-invoice .grid,
-  #printable-invoice .grid-cols-2,
-  #printable-invoice .md\:grid-cols-2,
-  #printable-payslip .grid,
-  #printable-payslip .grid-cols-2,
-  #printable-payslip .md\:grid-cols-2 {
-    display: grid !important;
-    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-  }
-
+  /* Ensure flex and grid layouts inside invoice render properly in print */
   #printable-invoice .flex,
+  #printable-tax-invoice .flex,
   #printable-payslip .flex {
     display: flex !important;
   }
 
-  #printable-invoice .flex-row,
-  #printable-payslip .flex-row {
-    flex-direction: row !important;
-  }
-
-  #printable-invoice .items-center,
-  #printable-payslip .items-center {
-    align-items: center !important;
-  }
-
   #printable-invoice .justify-between,
+  #printable-tax-invoice .justify-between,
   #printable-payslip .justify-between {
     justify-content: space-between !important;
   }
 
-  #printable-invoice .shrink-0,
-  #printable-payslip .shrink-0 {
-    flex-shrink: 0 !important;
+  #printable-invoice .items-start,
+  #printable-tax-invoice .items-start {
+    align-items: flex-start !important;
+  }
+
+  #printable-invoice .items-end,
+  #printable-tax-invoice .items-end {
+    align-items: flex-end !important;
+  }
+
+  #printable-invoice .items-center,
+  #printable-tax-invoice .items-center,
+  #printable-payslip .items-center {
+    align-items: center !important;
+  }
+
+  #printable-invoice .grid-cols-2,
+  #printable-tax-invoice .grid-cols-2,
+  #printable-payslip .grid-cols-2 {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   }
 
   /* Prevent page breaks inside critical blocks */
   #printable-invoice tr,
   #printable-invoice table,
+  #printable-tax-invoice tr,
+  #printable-tax-invoice table,
   #printable-payslip tr,
   #printable-payslip table {
     page-break-inside: avoid !important;

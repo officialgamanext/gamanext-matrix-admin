@@ -3310,7 +3310,7 @@ export default function EmployeeDetailPage({
                     <div>
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
-                        src="/gama-next-logo-reserved.png"
+                        src="/logo.jpeg"
                         alt="GAMANEXT"
                         className="h-11 w-auto object-contain"
                       />

@@ -89,7 +89,7 @@ export default function AdminLoginPage() {
         {/* 1. Brand Logo */}
         <div className="flex flex-col items-center">
           <Image
-            src="/gama-next-logo-reserved.png"
+            src="/logo.jpeg"
             alt="GamaNext Software Solutions"
             width={180}
             height={48}

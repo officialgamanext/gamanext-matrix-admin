@@ -39,7 +39,7 @@ export default function Navbar() {
       <div className="flex items-center space-x-3">
         <Link href="/" className="bg-white px-2.5 py-1 rounded-md shadow-sm flex items-center justify-center transition-transform hover:scale-[1.02]">
           <Image
-            src="/gama-next-logo-reserved.png"
+            src="/logo.jpeg"
             alt="GamaNext Software Solutions"
             width={130}
             height={32}

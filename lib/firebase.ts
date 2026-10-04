@@ -2146,6 +2146,61 @@ export async function deleteCustomerInvoiceFromStorage(id: string): Promise<bool
   return true;
 }
 
+export function getNextInvoiceNumber(
+  existingInvoices: CustomerInvoice[],
+  targetYear?: number
+): string {
+  const year = targetYear || new Date().getFullYear();
+  const yearStr = String(year);
+
+  let maxSeq = 0;
+
+  for (const inv of existingInvoices) {
+    if (!inv.invoiceNumber) continue;
+    // Skip mock seed invoice so new customer invoices begin at INV{year}01
+    if (inv.id === "inv-1") continue;
+
+    const clean = inv.invoiceNumber.trim().toUpperCase();
+
+    // Primary match: format INV202601, INV202602, etc. (starts with INV, followed by 4-digit year and sequential number)
+    const exactMatch = clean.match(new RegExp(`^INV${yearStr}(\\d+)$`, "i"));
+    if (exactMatch) {
+      const num = parseInt(exactMatch[1], 10);
+      if (!isNaN(num) && num > maxSeq) {
+        maxSeq = num;
+      }
+    } else {
+      // Also match legacy sequential if formatted as INV-2026-01 (excluding random 1000..9999 dummy IDs)
+      const altMatch = clean.match(new RegExp(`^INV[-_]?${yearStr}[-_]?(\\d+)$`, "i"));
+      if (altMatch) {
+        const num = parseInt(altMatch[1], 10);
+        if (!isNaN(num) && num < 1000 && num > maxSeq) {
+          maxSeq = num;
+        }
+      }
+    }
+  }
+
+  const nextSeq = maxSeq + 1;
+  const paddedSeq = String(nextSeq).padStart(2, "0");
+  return `INV${yearStr}${paddedSeq}`;
+}
+
+export function recalculateInvoiceTotals(
+  items: InvoiceItem[],
+  cgstRate: number = 9,
+  sgstRate: number = 9,
+  discount: number = 0
+) {
+  const subtotal = items.reduce((sum, item) => sum + (item.amount || 0), 0);
+  const cgstAmount = Math.round((subtotal * cgstRate) / 100);
+  const sgstAmount = Math.round((subtotal * sgstRate) / 100);
+  const taxAmount = cgstAmount + sgstAmount;
+  const total = Math.max(0, subtotal + taxAmount - discount);
+
+  return { subtotal, cgstAmount, sgstAmount, taxAmount, total };
+}
+
 /* ---------------- HOLIDAYS STORAGE ---------------- */
 export const LOCAL_STORAGE_KEY_HOLIDAYS = "gamanext_holidays";
 

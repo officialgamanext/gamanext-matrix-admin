@@ -40,7 +40,7 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
       <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4 selection:bg-[#0B4FBA] selection:text-white">
         <div className="bg-white p-4 rounded-[10px] shadow-md mb-4 border border-slate-100 animate-pulse flex items-center justify-center">
           <Image
-            src="/gama-next-logo-reserved.png"
+            src="/logo.jpeg"
             alt="GamaNext"
             width={150}
             height={38}
