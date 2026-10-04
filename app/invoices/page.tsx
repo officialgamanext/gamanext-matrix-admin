@@ -1174,7 +1174,7 @@ export default function InvoicesPage() {
             </div>
 
             {/* Printable Invoice Container */}
-            <div id="printable-invoice" className="p-8 sm:p-10 bg-white text-gray-900 space-y-5 text-xs font-sans print:p-0 print:m-0">
+            <div id="printable-invoice" className="p-8 sm:p-10 bg-white text-gray-900 space-y-5 text-xs font-sans print:m-0">
               {/* TOP HEADER */}
               <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
                 <div>

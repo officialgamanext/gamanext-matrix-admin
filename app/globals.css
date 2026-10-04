@@ -174,7 +174,7 @@ select:disabled,
 @media print {
   @page {
     size: A4 portrait;
-    margin: 10mm;
+    margin: 0 !important;
   }
 
   html,
@@ -236,7 +236,7 @@ select:disabled,
     visibility: visible !important;
   }
 
-  /* Position container flush at top-left of printable page */
+  /* Position container flush at top-left of printable page without browser headers/footers */
   #printable-invoice,
   #printable-tax-invoice,
   #printable-payslip {
@@ -246,7 +246,7 @@ select:disabled,
     width: 100% !important;
     max-width: 100% !important;
     margin: 0 !important;
-    padding: 0 !important;
+    padding: 10mm 14mm !important;
     border: none !important;
     box-shadow: none !important;
     background-color: #ffffff !important;
