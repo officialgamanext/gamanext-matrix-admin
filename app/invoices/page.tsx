@@ -40,6 +40,8 @@ import {
   User,
   CheckCircle2,
   Calendar,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 
 export default function InvoicesPage() {
@@ -49,6 +51,8 @@ export default function InvoicesPage() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("All");
+  const [currentPage, setCurrentPage] = useState(1);
+  const PAGE_SIZE = 24;
 
   // Modals
   const [previewInvoice, setPreviewInvoice] = useState<CustomerInvoice | null>(null);
@@ -137,7 +141,15 @@ export default function InvoicesPage() {
     loadData();
   }, []);
 
-  const filteredInvoices = invoices.filter((inv) => {
+  // Sort invoices so the latest created is at the top
+  const sortedInvoices = [...invoices].sort((a, b) => {
+    const timeA = new Date(a.createdAt || a.issueDate || 0).getTime();
+    const timeB = new Date(b.createdAt || b.issueDate || 0).getTime();
+    if (timeB !== timeA) return timeB - timeA;
+    return (b.invoiceNumber || "").localeCompare(a.invoiceNumber || "");
+  });
+
+  const filteredInvoices = sortedInvoices.filter((inv) => {
     const q = searchQuery.toLowerCase();
     const matchesQuery =
       inv.invoiceNumber.toLowerCase().includes(q) ||
@@ -148,6 +160,15 @@ export default function InvoicesPage() {
     const matchesStatus = statusFilter === "All" || inv.status === statusFilter;
     return matchesQuery && matchesStatus;
   });
+
+  // Reset to first page when search or status filter changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, statusFilter]);
+
+  const totalPages = Math.ceil(filteredInvoices.length / PAGE_SIZE) || 1;
+  const startIndex = (currentPage - 1) * PAGE_SIZE;
+  const paginatedInvoices = filteredInvoices.slice(startIndex, startIndex + PAGE_SIZE);
 
   const totalVolume = invoices.reduce((sum, inv) => sum + (inv.total || 0), 0);
   const paidVolume = invoices
@@ -165,6 +186,25 @@ export default function InvoicesPage() {
     } catch (err) {
       console.error("Error deleting invoice:", err);
     }
+  };
+
+  const handlePrintInvoice = (inv: CustomerInvoice) => {
+    const originalTitle = document.title;
+    const rawBusinessName = inv.customerDetails?.businessName || inv.customerDetails?.name || "Customer";
+    const cleanBusinessName = rawBusinessName.replace(/\s+/g, "");
+    const invoiceNumber = inv.invoiceNumber || "INV";
+    const filename = `${cleanBusinessName}-${invoiceNumber}`;
+
+    document.title = filename;
+
+    const restoreTitle = () => {
+      document.title = originalTitle;
+      window.removeEventListener("afterprint", restoreTitle);
+    };
+
+    window.addEventListener("afterprint", restoreTitle);
+    window.print();
+    setTimeout(restoreTitle, 2000);
   };
 
   const openWhatsappModal = (inv: CustomerInvoice) => {
@@ -579,7 +619,7 @@ export default function InvoicesPage() {
           </div>
         ) : (
           <div className="bg-white rounded-xl border border-gray-200 shadow-2xs divide-y divide-gray-100 overflow-hidden">
-            {filteredInvoices.map((inv) => (
+            {paginatedInvoices.map((inv) => (
               <div
                 key={inv.id}
                 className="p-4 hover:bg-gray-50 transition-colors flex flex-col md:flex-row md:items-center justify-between gap-4"
@@ -676,6 +716,76 @@ export default function InvoicesPage() {
                 </div>
               </div>
             ))}
+
+            {/* Pagination Controls */}
+            {totalPages > 1 && (
+              <div className="bg-gray-50/70 px-4 py-3 border-t border-gray-200 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+                <div className="text-gray-500 font-medium">
+                  Showing <span className="font-bold text-gray-900">{startIndex + 1}</span> to{" "}
+                  <span className="font-bold text-gray-900">
+                    {Math.min(startIndex + PAGE_SIZE, filteredInvoices.length)}
+                  </span>{" "}
+                  of <span className="font-bold text-gray-900">{filteredInvoices.length}</span> invoices
+                </div>
+
+                <div className="flex items-center space-x-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
+                    disabled={currentPage === 1}
+                    className="h-8 px-2.5 border border-gray-200 bg-white rounded-lg text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:hover:bg-white transition-colors flex items-center space-x-1 shadow-2xs"
+                    title="Previous Page"
+                  >
+                    <ChevronLeft className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline text-xs font-medium">Prev</span>
+                  </button>
+
+                  <div className="flex items-center space-x-1">
+                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((pageNum) => {
+                      if (
+                        pageNum === 1 ||
+                        pageNum === totalPages ||
+                        (pageNum >= currentPage - 1 && pageNum <= currentPage + 1)
+                      ) {
+                        return (
+                          <button
+                            key={pageNum}
+                            type="button"
+                            onClick={() => setCurrentPage(pageNum)}
+                            className={`w-8 h-8 rounded-lg text-xs font-bold transition-all ${
+                              currentPage === pageNum
+                                ? "bg-[#0B4FBA] text-white shadow-xs"
+                                : "bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 shadow-2xs"
+                            }`}
+                          >
+                            {pageNum}
+                          </button>
+                        );
+                      }
+                      if (pageNum === currentPage - 2 || pageNum === currentPage + 2) {
+                        return (
+                          <span key={pageNum} className="text-gray-400 px-1 select-none font-bold">
+                            ...
+                          </span>
+                        );
+                      }
+                      return null;
+                    })}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
+                    disabled={currentPage >= totalPages}
+                    className="h-8 px-2.5 border border-gray-200 bg-white rounded-lg text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:hover:bg-white transition-colors flex items-center space-x-1 shadow-2xs"
+                    title="Next Page"
+                  >
+                    <span className="hidden sm:inline text-xs font-medium">Next</span>
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -1149,7 +1259,7 @@ export default function InvoicesPage() {
               <div className="flex items-center space-x-2">
                 <button
                   type="button"
-                  onClick={() => window.print()}
+                  onClick={() => handlePrintInvoice(previewInvoice)}
                   className="px-3 py-1 bg-white/10 hover:bg-white/20 text-white text-xs font-semibold rounded-md flex items-center space-x-1 transition"
                 >
                   <Printer className="w-3.5 h-3.5" />
@@ -1275,13 +1385,13 @@ export default function InvoicesPage() {
               <div className="border border-gray-200 rounded-xl overflow-hidden">
                 <table className="w-full text-left border-collapse">
                   <thead>
-                    <tr className="bg-gray-100/90 text-gray-700 text-xs font-semibold border-b border-gray-200">
-                      <th className="py-2.5 px-3 text-center w-12">#</th>
-                      <th className="py-2.5 px-3">Item Description</th>
-                      <th className="py-2.5 px-3 text-center w-24">HSN/SAC</th>
-                      <th className="py-2.5 px-3 text-center w-16">Qty</th>
-                      <th className="py-2.5 px-3 text-right w-28">Rate (₹)</th>
-                      <th className="py-2.5 px-3 text-right w-28">Amount (₹)</th>
+                    <tr className="bg-[#0B4FBA] text-white text-xs font-semibold">
+                      <th className="py-2.5 px-3 text-center w-12 text-white font-semibold">#</th>
+                      <th className="py-2.5 px-3 text-white font-semibold">Item Description</th>
+                      <th className="py-2.5 px-3 text-center w-24 text-white font-semibold">HSN/SAC</th>
+                      <th className="py-2.5 px-3 text-center w-16 text-white font-semibold">Qty</th>
+                      <th className="py-2.5 px-3 text-right w-28 text-white font-semibold">Rate (₹)</th>
+                      <th className="py-2.5 px-3 text-right w-28 text-white font-semibold">Amount (₹)</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100 text-xs">

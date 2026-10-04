@@ -580,6 +580,25 @@ export default function CustomerDetailPage({
     }
   };
 
+  const handlePrintInvoice = (inv: CustomerInvoice) => {
+    const originalTitle = document.title;
+    const rawBusinessName = inv.customerDetails?.businessName || inv.customerDetails?.name || "Customer";
+    const cleanBusinessName = rawBusinessName.replace(/\s+/g, "");
+    const invoiceNumber = inv.invoiceNumber || "INV";
+    const filename = `${cleanBusinessName}-${invoiceNumber}`;
+
+    document.title = filename;
+
+    const restoreTitle = () => {
+      document.title = originalTitle;
+      window.removeEventListener("afterprint", restoreTitle);
+    };
+
+    window.addEventListener("afterprint", restoreTitle);
+    window.print();
+    setTimeout(restoreTitle, 2000);
+  };
+
   // --- WHATSAPP SHARE HANDLERS ---
   const handleOpenWhatsapp = (inv: CustomerInvoice) => {
     setWhatsappInvoice(inv);
@@ -1795,7 +1814,7 @@ export default function CustomerDetailPage({
               <div className="flex items-center space-x-2">
                 <button
                   type="button"
-                  onClick={() => window.print()}
+                  onClick={() => handlePrintInvoice(previewInvoice)}
                   className="px-3 py-1 bg-white/10 hover:bg-white/20 text-white text-xs font-semibold rounded-md flex items-center space-x-1 transition"
                 >
                   <Printer className="w-3.5 h-3.5" />
@@ -1921,13 +1940,13 @@ export default function CustomerDetailPage({
               <div className="border border-gray-200 rounded-xl overflow-hidden">
                 <table className="w-full text-left border-collapse">
                   <thead>
-                    <tr className="bg-gray-100/90 text-gray-700 text-xs font-semibold border-b border-gray-200">
-                      <th className="py-2.5 px-3 text-center w-12 font-semibold">#</th>
-                      <th className="py-2.5 px-3 font-semibold">Item Description</th>
-                      <th className="py-2.5 px-3 text-center w-24 font-semibold">HSN/SAC</th>
-                      <th className="py-2.5 px-3 text-center w-16 font-semibold">Qty</th>
-                      <th className="py-2.5 px-3 text-right w-28 font-semibold">Rate (₹)</th>
-                      <th className="py-2.5 px-3 text-right w-28 font-semibold">Amount (₹)</th>
+                    <tr className="bg-[#0B4FBA] text-white text-xs font-semibold">
+                      <th className="py-2.5 px-3 text-center w-12 text-white font-semibold">#</th>
+                      <th className="py-2.5 px-3 text-white font-semibold">Item Description</th>
+                      <th className="py-2.5 px-3 text-center w-24 text-white font-semibold">HSN/SAC</th>
+                      <th className="py-2.5 px-3 text-center w-16 text-white font-semibold">Qty</th>
+                      <th className="py-2.5 px-3 text-right w-28 text-white font-semibold">Rate (₹)</th>
+                      <th className="py-2.5 px-3 text-right w-28 text-white font-semibold">Amount (₹)</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100 text-xs">

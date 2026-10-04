@@ -2067,6 +2067,12 @@ export async function getCustomerInvoicesFromStorage(
     });
     if (items.length > 0) {
       const unique = Array.from(new Map(items.map((inv) => [inv.id, inv])).values());
+      unique.sort((a, b) => {
+        const timeA = new Date(a.createdAt || a.issueDate || 0).getTime();
+        const timeB = new Date(b.createdAt || b.issueDate || 0).getTime();
+        if (timeB !== timeA) return timeB - timeA;
+        return (b.invoiceNumber || "").localeCompare(a.invoiceNumber || "");
+      });
       return customerId ? unique.filter((inv) => inv.customerId === customerId) : unique;
     }
   } catch (e) {}
@@ -2077,6 +2083,12 @@ export async function getCustomerInvoicesFromStorage(
       try {
         const all: CustomerInvoice[] = JSON.parse(stored);
         const unique = Array.from(new Map(all.map((inv) => [inv.id, inv])).values());
+        unique.sort((a, b) => {
+          const timeA = new Date(a.createdAt || a.issueDate || 0).getTime();
+          const timeB = new Date(b.createdAt || b.issueDate || 0).getTime();
+          if (timeB !== timeA) return timeB - timeA;
+          return (b.invoiceNumber || "").localeCompare(a.invoiceNumber || "");
+        });
         return customerId ? unique.filter((inv) => inv.customerId === customerId) : unique;
       } catch (e) {}
     } else {
@@ -2084,7 +2096,13 @@ export async function getCustomerInvoicesFromStorage(
         LOCAL_STORAGE_KEY_CUSTOMER_INVOICES,
         JSON.stringify(SEED_INVOICES)
       );
-      return customerId ? SEED_INVOICES.filter((inv) => inv.customerId === customerId) : SEED_INVOICES;
+      const seedCopy = [...SEED_INVOICES].sort((a, b) => {
+        const timeA = new Date(a.createdAt || a.issueDate || 0).getTime();
+        const timeB = new Date(b.createdAt || b.issueDate || 0).getTime();
+        if (timeB !== timeA) return timeB - timeA;
+        return (b.invoiceNumber || "").localeCompare(a.invoiceNumber || "");
+      });
+      return customerId ? seedCopy.filter((inv) => inv.customerId === customerId) : seedCopy;
     }
   }
   return customerId ? SEED_INVOICES.filter((inv) => inv.customerId === customerId) : SEED_INVOICES;
