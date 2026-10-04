@@ -190,7 +190,7 @@ export default function InvoicesPage() {
 
   const handlePrintInvoice = (inv: CustomerInvoice) => {
     const originalTitle = document.title;
-    const rawBusinessName = inv.customerDetails?.businessName || inv.customerDetails?.name || "Customer";
+    const rawBusinessName = inv.customerDetails?.businessName || inv.customerDetails?.name || "Client";
     const cleanBusinessName = rawBusinessName.replace(/\s+/g, "");
     const invoiceNumber = inv.invoiceNumber || "INV";
     const filename = `${cleanBusinessName}-${invoiceNumber}`;
@@ -477,7 +477,7 @@ export default function InvoicesPage() {
   const handleSaveInvoice = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!invoiceForm.customerId) {
-      alert("Please select a customer for this invoice.");
+      alert("Please select a client for this invoice.");
       return;
     }
     if (!invoiceForm.invoiceNumber || invoiceForm.items.length === 0) {
@@ -515,7 +515,7 @@ export default function InvoicesPage() {
                 </span>
               </div>
               <p className="text-xs text-gray-500 mt-0.5">
-                Overview of customer billing, payment statuses, PDF previews, and WhatsApp sharing.
+                Overview of client billing, payment statuses, PDF previews, and WhatsApp sharing.
               </p>
             </div>
           </div>
@@ -533,7 +533,7 @@ export default function InvoicesPage() {
               className="px-3.5 py-2 bg-white hover:bg-gray-50 border border-gray-300 text-gray-700 text-xs font-semibold rounded-lg shadow-2xs transition-colors flex items-center justify-center space-x-1.5"
             >
               <Users className="w-3.5 h-3.5 text-gray-500" />
-              <span>Customers</span>
+              <span>Clients</span>
             </Link>
           </div>
         </div>
@@ -553,7 +553,7 @@ export default function InvoicesPage() {
             <div className="text-2xl font-bold text-emerald-700 mt-1">
               ₹{paidVolume.toLocaleString("en-IN")}
             </div>
-            <p className="text-[11px] text-emerald-600 mt-1">Paid customer invoices</p>
+            <p className="text-[11px] text-emerald-600 mt-1">Paid client invoices</p>
           </div>
 
           <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-2xs">
@@ -571,7 +571,7 @@ export default function InvoicesPage() {
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
             <input
               type="text"
-              placeholder="Search by invoice #, customer name, phone..."
+              placeholder="Search by invoice #, client name, phone..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-9 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0B4FBA]/20 focus:border-[#0B4FBA] transition-all"
@@ -607,7 +607,7 @@ export default function InvoicesPage() {
             <Receipt className="w-10 h-10 text-gray-300 mx-auto mb-3" />
             <h3 className="text-sm font-semibold text-gray-900">No Invoices Found</h3>
             <p className="text-xs text-gray-500 mt-1 max-w-sm mx-auto">
-              No billing records match your search. Click below to create a new invoice for any customer.
+              No billing records match your search. Click below to create a new invoice for any client.
             </p>
             <button
               onClick={handleOpenAddInvoice}
@@ -782,7 +782,7 @@ export default function InvoicesPage() {
         )}
       </div>
 
-      {/* CREATE / EDIT CUSTOMER INVOICE MODAL */}
+      {/* CREATE / EDIT CLIENT INVOICE MODAL */}
       {isInvoiceModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-xl border border-gray-200 w-full max-w-4xl overflow-hidden max-h-[92vh] flex flex-col animate-in fade-in">
@@ -790,7 +790,7 @@ export default function InvoicesPage() {
               <div className="flex items-center space-x-2">
                 <Receipt className="w-5 h-5 text-[#0B4FBA]" />
                 <h2 className="text-base font-bold text-gray-900">
-                  {editingInvoice ? `Edit Invoice - ${editingInvoice.invoiceNumber}` : "Create Customer Invoice"}
+                  {editingInvoice ? `Edit Invoice - ${editingInvoice.invoiceNumber}` : "Create Client Invoice"}
                 </h2>
               </div>
               <button
@@ -802,17 +802,17 @@ export default function InvoicesPage() {
             </div>
 
             <form onSubmit={handleSaveInvoice} className="p-6 space-y-6 overflow-y-auto grow">
-              {/* SELECT CUSTOMER SECTION */}
+              {/* SELECT CLIENT SECTION */}
               <div className="bg-blue-50/70 p-4 rounded-xl border border-blue-100 space-y-3">
                 <div className="flex items-center justify-between">
                   <label className="block text-xs font-bold text-[#0B4FBA] uppercase tracking-wider flex items-center space-x-1.5">
                     <User className="w-4 h-4" />
-                    <span>Select Customer to Bill *</span>
+                    <span>Select Client to Bill *</span>
                   </label>
                   {selectedCustomerId && (
                     <span className="text-[11px] text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full font-semibold flex items-center space-x-1">
                       <CheckCircle2 className="w-3 h-3" />
-                      <span>Linked to Customer Profile</span>
+                      <span>Linked to Client Profile</span>
                     </span>
                   )}
                 </div>
@@ -824,7 +824,7 @@ export default function InvoicesPage() {
                     className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-xs font-semibold text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#0B4FBA]/20 focus:border-[#0B4FBA]"
                     required
                   >
-                    <option value="">-- Choose a Customer from Database --</option>
+                    <option value="">-- Choose a Client from Database --</option>
                     {customers.map((c) => (
                       <option key={c.id} value={c.id}>
                         {c.businessName ? `${c.businessName} (${c.name})` : c.name} — {c.mobileNumber}
@@ -833,7 +833,7 @@ export default function InvoicesPage() {
                   </select>
                 </div>
                 <p className="text-[11px] text-gray-500">
-                  Selecting a customer automatically populates their contact, address, and GSTIN details. This invoice will appear directly in their customer details page.
+                  Selecting a client automatically populates their contact, address, and GSTIN details. This invoice will appear directly in their client details page.
                 </p>
               </div>
 
@@ -888,10 +888,10 @@ export default function InvoicesPage() {
                 </div>
               </div>
 
-              {/* CUSTOMER BILLING INFO */}
+              {/* CLIENT BILLING INFO */}
               <div className="space-y-2">
                 <span className="text-xs font-bold text-gray-500 uppercase tracking-wider block">
-                  Customer Billing Info & GSTIN
+                  Client Billing Info & GSTIN
                 </span>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-4 bg-gray-50 rounded-xl border border-gray-100">
                   <div>
@@ -931,7 +931,7 @@ export default function InvoicesPage() {
                   </div>
 
                   <div>
-                    <label className="block text-[11px] font-medium text-gray-600 mb-0.5">Customer Mobile</label>
+                    <label className="block text-[11px] font-medium text-gray-600 mb-0.5">Client Mobile</label>
                     <input
                       type="text"
                       value={invoiceForm.customerDetails.mobileNumber}
@@ -967,7 +967,7 @@ export default function InvoicesPage() {
                   </div>
 
                   <div>
-                    <label className="block text-[11px] font-medium text-gray-600 mb-0.5">Customer GSTIN</label>
+                    <label className="block text-[11px] font-medium text-gray-600 mb-0.5">Client GSTIN</label>
                     <input
                       type="text"
                       placeholder="Leave empty if none"
@@ -1195,7 +1195,7 @@ export default function InvoicesPage() {
                     value={invoiceForm.notes || ""}
                     onChange={(e) => setInvoiceForm({ ...invoiceForm, notes: e.target.value })}
                     className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-xs"
-                    placeholder="Notes to the customer..."
+                    placeholder="Notes to the client..."
                   />
                 </div>
                 <div>

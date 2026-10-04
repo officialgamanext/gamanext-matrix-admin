@@ -19,7 +19,7 @@ export default function DashboardPage() {
             subtext: "+14.2% from last month",
           },
           {
-            label: "Active Customers",
+            label: "Active Clients",
             value: "1,248",
             subtext: "98.4% retention rate",
           },

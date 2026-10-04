@@ -558,7 +558,7 @@ export default function SettingsPage() {
                 <div className="border-b border-gray-100 pb-3">
                   <h2 className="text-base font-bold text-gray-900">Edit Bank Details & UPI Payment QR Code</h2>
                   <p className="text-xs text-gray-500">
-                    Upload your UPI payment QR code image to print directly on generated customer invoices.
+                    Upload your UPI payment QR code image to print directly on generated client invoices.
                   </p>
                 </div>
 

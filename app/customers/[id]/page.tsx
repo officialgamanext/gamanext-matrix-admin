@@ -582,7 +582,7 @@ export default function CustomerDetailPage({
 
   const handlePrintInvoice = (inv: CustomerInvoice) => {
     const originalTitle = document.title;
-    const rawBusinessName = inv.customerDetails?.businessName || inv.customerDetails?.name || "Customer";
+    const rawBusinessName = inv.customerDetails?.businessName || inv.customerDetails?.name || "Client";
     const cleanBusinessName = rawBusinessName.replace(/\s+/g, "");
     const invoiceNumber = inv.invoiceNumber || "INV";
     const filename = `${cleanBusinessName}-${invoiceNumber}`;
@@ -658,7 +658,7 @@ export default function CustomerDetailPage({
       <AdminLayout>
         <div className="p-12 text-center bg-white rounded-xl border border-gray-200 shadow-2xs">
           <div className="w-8 h-8 border-2 border-[#0B4FBA] border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
-          <p className="text-xs text-gray-500 font-medium">Loading customer details...</p>
+          <p className="text-xs text-gray-500 font-medium">Loading client details...</p>
         </div>
       </AdminLayout>
     );
@@ -669,16 +669,16 @@ export default function CustomerDetailPage({
       <AdminLayout>
         <div className="p-12 text-center bg-white rounded-xl border border-gray-200">
           <AlertCircle className="w-10 h-10 text-amber-500 mx-auto mb-3" />
-          <h2 className="text-lg font-bold text-gray-900">Customer Not Found</h2>
+          <h2 className="text-lg font-bold text-gray-900">Client Not Found</h2>
           <p className="text-xs text-gray-500 mt-1">
-            The customer with ID "{customerId}" could not be located.
+            The client with ID "{customerId}" could not be located.
           </p>
           <Link
             href="/customers"
             className="inline-flex items-center space-x-2 mt-4 px-4 py-2 bg-[#0B4FBA] text-white text-xs font-semibold rounded-lg hover:bg-[#083c8d]"
           >
             <ArrowLeft className="w-4 h-4" />
-            <span>Back to Customers</span>
+            <span>Back to Clients</span>
           </Link>
         </div>
       </AdminLayout>
@@ -695,7 +695,7 @@ export default function CustomerDetailPage({
             className="inline-flex items-center space-x-2 text-xs font-semibold text-gray-600 hover:text-[#0B4FBA] transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />
-            <span>Back to Customers</span>
+            <span>Back to Clients</span>
           </Link>
 
           <div className="flex items-center space-x-2">
@@ -711,7 +711,7 @@ export default function CustomerDetailPage({
             </button>
             <button
               onClick={async () => {
-                if (confirm("Delete this customer profile permanently?")) {
+                if (confirm("Delete this client profile permanently?")) {
                   await deleteCustomerFromStorage(customerId);
                   router.push("/customers");
                 }
@@ -790,7 +790,7 @@ export default function CustomerDetailPage({
               }`}
             >
               <Users className="w-4 h-4" />
-              <span>Customer Profile</span>
+              <span>Client Profile</span>
             </button>
 
             <button
@@ -834,7 +834,7 @@ export default function CustomerDetailPage({
           <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-2xs space-y-6">
             <div className="flex items-center justify-between border-b border-gray-100 pb-4">
               <div>
-                <h2 className="text-base font-bold text-gray-900">Customer Details Profile</h2>
+                <h2 className="text-base font-bold text-gray-900">Client Details Profile</h2>
                 <p className="text-xs text-gray-500">Contact information, business GST, and billing address.</p>
               </div>
               <button
@@ -859,7 +859,7 @@ export default function CustomerDetailPage({
                   <div className="flex items-start space-x-3">
                     <Users className="w-4 h-4 text-gray-400 mt-0.5" />
                     <div>
-                      <div className="text-[11px] text-gray-500 font-medium">Customer Name</div>
+                      <div className="text-[11px] text-gray-500 font-medium">Client Name</div>
                       <div className="text-sm font-semibold text-gray-900">{customer.name}</div>
                     </div>
                   </div>
@@ -905,7 +905,7 @@ export default function CustomerDetailPage({
                   <div className="flex items-start space-x-3">
                     <FileText className="w-4 h-4 text-[#0B4FBA] mt-0.5" />
                     <div>
-                      <div className="text-[11px] text-gray-500 font-medium">Customer GSTIN / Tax ID</div>
+                      <div className="text-[11px] text-gray-500 font-medium">Client GSTIN / Tax ID</div>
                       <div className="text-sm font-bold font-mono text-gray-900">
                         {customer.gstin || "N/A (Empty)"}
                       </div>
@@ -1254,7 +1254,7 @@ export default function CustomerDetailPage({
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-xl border border-gray-200 w-full max-w-lg overflow-hidden animate-in fade-in">
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gray-50">
-              <h2 className="text-base font-bold text-gray-900">Edit Customer Profile</h2>
+              <h2 className="text-base font-bold text-gray-900">Edit Client Profile</h2>
               <button onClick={() => setIsEditProfileOpen(false)} className="text-gray-400 hover:text-gray-600">
                 <X className="w-5 h-5" />
               </button>
@@ -1262,7 +1262,7 @@ export default function CustomerDetailPage({
 
             <form onSubmit={handleSaveProfile} className="p-6 space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">Customer Name *</label>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">Client Name *</label>
                 <input
                   type="text"
                   value={profileForm.name}
@@ -1306,7 +1306,7 @@ export default function CustomerDetailPage({
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">Customer GSTIN</label>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">Client GSTIN</label>
                   <input
                     type="text"
                     placeholder="Leave empty if none"
@@ -1512,7 +1512,7 @@ export default function CustomerDetailPage({
               <div className="flex items-center space-x-2">
                 <Receipt className="w-5 h-5 text-[#0B4FBA]" />
                 <h2 className="text-base font-bold text-gray-900">
-                  {editingInvoice ? "Edit Invoice" : "Create Customer Invoice"}
+                  {editingInvoice ? "Edit Invoice" : "Create Client Invoice"}
                 </h2>
               </div>
               <button onClick={() => setIsInvoiceModalOpen(false)} className="text-gray-400 hover:text-gray-600">
@@ -1566,7 +1566,7 @@ export default function CustomerDetailPage({
 
               <div className="space-y-2">
                 <span className="text-xs font-bold text-gray-500 uppercase tracking-wider block">
-                  Customer Billing Info & GSTIN
+                  Client Billing Info & GSTIN
                 </span>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-4 bg-gray-50 rounded-xl border border-gray-100">
                   <div>
@@ -1605,7 +1605,7 @@ export default function CustomerDetailPage({
                   </div>
                   <div>
                     <label className="block text-[11px] font-medium text-gray-600 mb-0.5">
-                      Customer GSTIN
+                      Client GSTIN
                     </label>
                     <input
                       type="text"

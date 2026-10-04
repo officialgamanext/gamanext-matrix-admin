@@ -133,13 +133,13 @@ export default function CustomersPage() {
 
   const handleDelete = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!confirm("Are you sure you want to delete this customer?")) return;
+    if (!confirm("Are you sure you want to delete this client?")) return;
     setDeletingId(id);
     try {
       await deleteCustomerFromStorage(id);
       await loadData();
     } catch (err) {
-      console.error("Failed to delete customer:", err);
+      console.error("Failed to delete client:", err);
     } finally {
       setDeletingId(null);
     }
@@ -147,7 +147,7 @@ export default function CustomersPage() {
 
   const validateForm = () => {
     const errors: Record<string, string> = {};
-    if (!formData.name.trim()) errors.name = "Customer Name is required";
+    if (!formData.name.trim()) errors.name = "Client Name is required";
     if (!formData.mobileNumber.trim()) errors.mobileNumber = "Mobile Number is required";
     if (!formData.businessName.trim()) errors.businessName = "Business Name is required";
     if (!formData.address.trim()) errors.address = "Address is required";
@@ -185,7 +185,7 @@ export default function CustomersPage() {
             </div>
             <div>
               <div className="flex items-center space-x-2">
-                <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Customers</h1>
+                <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Clients</h1>
                 <span className="bg-blue-100 text-[#0B4FBA] text-xs font-semibold px-2.5 py-0.5 rounded-full border border-blue-200">
                   {customers.length} Total
                 </span>
@@ -201,7 +201,7 @@ export default function CustomersPage() {
             className="px-4 py-2 bg-[#0B4FBA] hover:bg-[#083c8d] text-white text-xs font-semibold rounded-lg shadow-sm transition-colors flex items-center justify-center space-x-2"
           >
             <Plus className="w-4 h-4" />
-            <span>Add Customer</span>
+            <span>Add Client</span>
           </button>
         </div>
 
@@ -209,7 +209,7 @@ export default function CustomersPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-2xs">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-gray-500">Total Customers</span>
+              <span className="text-xs font-medium text-gray-500">Total Clients</span>
               <div className="p-2 bg-blue-50 text-blue-600 rounded-lg">
                 <Users className="w-4 h-4" />
               </div>
@@ -271,7 +271,7 @@ export default function CustomersPage() {
             />
           </div>
           <div className="text-xs text-gray-500 font-medium">
-            Showing <span className="font-semibold text-gray-900">{filteredCustomers.length}</span> of {customers.length} customers
+            Showing <span className="font-semibold text-gray-900">{filteredCustomers.length}</span> of {customers.length} clients
           </div>
         </div>
 
@@ -279,23 +279,23 @@ export default function CustomersPage() {
         {loading ? (
           <div className="p-12 text-center bg-white rounded-xl border border-gray-200">
             <div className="w-8 h-8 border-2 border-[#0B4FBA] border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
-            <p className="text-xs text-gray-500 font-medium">Loading customers...</p>
+            <p className="text-xs text-gray-500 font-medium">Loading clients...</p>
           </div>
         ) : filteredCustomers.length === 0 ? (
           <div className="p-12 text-center bg-white rounded-xl border border-gray-200">
             <Users className="w-10 h-10 text-gray-300 mx-auto mb-3" />
-            <h3 className="text-sm font-semibold text-gray-900">No Customers Found</h3>
+            <h3 className="text-sm font-semibold text-gray-900">No Clients Found</h3>
             <p className="text-xs text-gray-500 mt-1 max-w-sm mx-auto">
               {searchQuery
-                ? `No customers match "${searchQuery}". Try a different keyword.`
-                : "Get started by adding your first customer."}
+                ? `No clients match "${searchQuery}". Try a different keyword.`
+                : "Get started by adding your first client."}
             </p>
             {!searchQuery && (
               <button
                 onClick={handleOpenAdd}
                 className="mt-4 px-4 py-2 bg-[#0B4FBA] text-white text-xs font-semibold rounded-lg hover:bg-[#083c8d]"
               >
-                Add Customer Now
+                Add Client Now
               </button>
             )}
           </div>
@@ -405,7 +405,7 @@ export default function CustomersPage() {
               <div className="flex items-center space-x-2">
                 <Users className="w-5 h-5 text-[#0B4FBA]" />
                 <h2 className="text-base font-bold text-gray-900">
-                  {editingCustomer ? "Edit Customer Details" : "Add New Customer"}
+                  {editingCustomer ? "Edit Client Details" : "Add New Client"}
                 </h2>
               </div>
               <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-600 p-1">
@@ -416,7 +416,7 @@ export default function CustomersPage() {
             <form onSubmit={handleSubmit} className="p-6 space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-gray-700 mb-1">
-                  Customer Name <span className="text-red-500">*</span>
+                  Client Name <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -480,7 +480,7 @@ export default function CustomersPage() {
 
                 <div>
                   <label className="block text-xs font-semibold text-gray-700 mb-1">
-                    Customer GSTIN / Tax ID <span className="text-gray-400 font-normal">(Optional)</span>
+                    Client GSTIN / Tax ID <span className="text-gray-400 font-normal">(Optional)</span>
                   </label>
                   <input
                     type="text"
@@ -522,7 +522,7 @@ export default function CustomersPage() {
                   className="px-5 py-2 bg-[#0B4FBA] hover:bg-[#083c8d] text-white text-xs font-semibold rounded-lg shadow-sm flex items-center space-x-2 disabled:opacity-50"
                 >
                   <CheckCircle2 className="w-4 h-4" />
-                  <span>{editingCustomer ? "Update Customer" : "Save Customer"}</span>
+                  <span>{editingCustomer ? "Update Client" : "Save Client"}</span>
                 </button>
               </div>
             </form>

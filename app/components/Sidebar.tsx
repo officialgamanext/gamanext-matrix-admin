@@ -29,7 +29,7 @@ export default function Sidebar() {
       icon: LayoutDashboard,
     },
     {
-      name: "Customers",
+      name: "Clients",
       href: "/customers",
       icon: Users,
     },

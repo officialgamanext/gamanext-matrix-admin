@@ -802,7 +802,7 @@ function AddEditContactModal({
               type="text"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              placeholder="e.g. Wholesale customer, Bangalore"
+              placeholder="e.g. Wholesale client, Bangalore"
               className="w-full h-[38px] px-3 bg-gray-50 border border-gray-300 rounded-[6px] text-xs focus:outline-none focus:ring-2 focus:ring-[#0B4FBA]/30 focus:border-[#0B4FBA] focus:bg-white transition"
             />
           </div>
