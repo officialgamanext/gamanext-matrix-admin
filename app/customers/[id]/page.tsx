@@ -1215,32 +1215,29 @@ export default function CustomerDetailPage({
                       <div className="flex items-center space-x-1.5 pl-3 border-l border-gray-200">
                         <button
                           onClick={() => setPreviewInvoice(inv)}
-                          className="px-2.5 py-1.5 bg-blue-50 text-[#0B4FBA] hover:bg-blue-100 text-xs font-semibold rounded-lg flex items-center space-x-1"
+                          className="p-2 text-[#0B4FBA] bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors flex items-center justify-center"
+                          title="Preview / Print Invoice"
+                          aria-label="Preview Invoice"
                         >
-                          <Eye className="w-3.5 h-3.5" />
-                          <span>Preview</span>
-                        </button>
-
-                        <button
-                          onClick={() => handleOpenWhatsapp(inv)}
-                          className="px-2.5 py-1.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 text-xs font-semibold rounded-lg flex items-center space-x-1"
-                        >
-                          <MessageSquare className="w-3.5 h-3.5" />
-                          <span>WhatsApp</span>
+                          <Eye className="w-4 h-4" />
                         </button>
 
                         <button
                           onClick={() => handleOpenEditInvoice(inv)}
-                          className="p-1.5 text-gray-500 hover:text-[#0B4FBA] rounded-lg"
+                          className="p-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors flex items-center justify-center"
+                          title="Edit Invoice"
+                          aria-label="Edit Invoice"
                         >
-                          <Edit2 className="w-3.5 h-3.5" />
+                          <Edit2 className="w-4 h-4 text-gray-600" />
                         </button>
 
                         <button
-                          onClick={() => handleDeleteInvoice(inv.id!)}
-                          className="p-1.5 text-gray-500 hover:text-red-600 rounded-lg"
+                          onClick={() => handleOpenWhatsapp(inv)}
+                          className="p-2 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition-colors flex items-center justify-center"
+                          title="Send on WhatsApp"
+                          aria-label="Send on WhatsApp"
                         >
-                          <Trash2 className="w-3.5 h-3.5" />
+                          <MessageSquare className="w-4 h-4" />
                         </button>
                       </div>
                     </div>
