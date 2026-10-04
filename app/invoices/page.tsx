@@ -759,20 +759,21 @@ export default function InvoicesPage() {
                       <div className="flex items-center space-x-1">
                         <button
                           onClick={() => handleDownloadPdf(inv)}
-                          className="px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-semibold rounded-lg transition-colors flex items-center space-x-1 shadow-2xs"
+                          className="p-2 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition-colors flex items-center justify-center"
                           title="Download Invoice PDF"
+                          aria-label="Download Invoice PDF"
                         >
-                          <Download className="w-3.5 h-3.5" />
-                          <span>Download</span>
+                          <Download className="w-4 h-4" />
                         </button>
                         <button
                           onClick={() => handleGeneratePdf(inv)}
                           disabled={generatingId === inv.id}
-                          className="p-1.5 text-gray-400 hover:text-[#0B4FBA] hover:bg-blue-50 rounded-lg transition-colors"
+                          className="p-2 text-gray-500 hover:text-[#0B4FBA] hover:bg-blue-50 rounded-lg transition-colors flex items-center justify-center disabled:opacity-60"
                           title="Regenerate PDF in Cloudinary"
+                          aria-label="Regenerate PDF"
                         >
                           <RotateCw
-                            className={`w-3.5 h-3.5 ${
+                            className={`w-4 h-4 ${
                               generatingId === inv.id ? "animate-spin text-[#0B4FBA]" : ""
                             }`}
                           />
@@ -782,19 +783,14 @@ export default function InvoicesPage() {
                       <button
                         onClick={() => handleGeneratePdf(inv)}
                         disabled={generatingId === inv.id}
-                        className="px-2.5 py-1.5 bg-[#0B4FBA] hover:bg-[#083c8d] text-white text-xs font-semibold rounded-lg transition-colors flex items-center space-x-1.5 disabled:opacity-60 shadow-2xs"
+                        className="p-2 bg-[#0B4FBA] hover:bg-[#083c8d] text-white rounded-lg transition-colors flex items-center justify-center disabled:opacity-60"
                         title="Generate PDF & Save to Cloudinary"
+                        aria-label="Generate PDF"
                       >
                         {generatingId === inv.id ? (
-                          <>
-                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                            <span>Generating...</span>
-                          </>
+                          <Loader2 className="w-4 h-4 animate-spin" />
                         ) : (
-                          <>
-                            <Sparkles className="w-3.5 h-3.5" />
-                            <span>Generate</span>
-                          </>
+                          <Sparkles className="w-4 h-4" />
                         )}
                       </button>
                     )}
