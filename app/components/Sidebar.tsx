@@ -15,7 +15,6 @@ import {
   Settings,
   ChevronRight,
   Sparkles,
-  MessageCircle,
   Contact,
 } from "lucide-react";
 
@@ -72,11 +71,6 @@ export default function Sidebar() {
       name: "Quotations",
       href: "/quotations",
       icon: FileText,
-    },
-    {
-      name: "Messages",
-      href: "/messages",
-      icon: MessageCircle,
     },
   ];
 
