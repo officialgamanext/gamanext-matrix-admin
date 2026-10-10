@@ -11,6 +11,7 @@ import {
   getDepartmentsFromStorage,
   getRolesFromStorage,
   EmployeeData,
+  ALL_WEEKDAYS,
 } from "@/lib/firebase";
 import { uploadToImageKit } from "@/lib/imagekit";
 import {
@@ -27,6 +28,7 @@ import {
   Eye,
   EyeOff,
   Lock,
+  Check,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -61,6 +63,7 @@ export default function AddEmployeePage() {
     jobType: "Full-Time",
     monthStartDate: "1",
     monthEndDate: "31",
+    weekendDays: ["Saturday", "Sunday"],
     username: "",
     password: "",
     aadharNumber: "",
@@ -173,7 +176,7 @@ export default function AddEmployeePage() {
   };
 
   // Generic input handler
-  const handleChange = (field: keyof EmployeeData, value: string) => {
+  const handleChange = (field: keyof EmployeeData, value: any) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
@@ -619,6 +622,44 @@ export default function AddEmployeePage() {
                 onChange={(val) => handleChange("monthEndDate", val)}
                 placeholder="End Day (1-31)"
               />
+            </div>
+
+            {/* Weekend Days Multi-select */}
+            <div className="sm:col-span-2">
+              <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+                Weekend Days (Weekly Off Days)
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {ALL_WEEKDAYS.map((day) => {
+                  const current = formData.weekendDays && formData.weekendDays.length > 0
+                    ? formData.weekendDays
+                    : ["Saturday", "Sunday"];
+                  const isSelected = current.includes(day);
+                  return (
+                    <button
+                      key={day}
+                      type="button"
+                      onClick={() => {
+                        const next = isSelected
+                          ? current.filter((d) => d !== day)
+                          : [...current, day];
+                        handleChange("weekendDays", next);
+                      }}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all cursor-pointer flex items-center space-x-1.5 ${
+                        isSelected
+                          ? "bg-[#0B4FBA] text-white border-[#0B4FBA] shadow-xs"
+                          : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
+                      }`}
+                    >
+                      <span>{day}</span>
+                      {isSelected && <Check className="w-3.5 h-3.5" />}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="text-[11px] text-gray-400 mt-1">
+                Selected days are exempt as weekly offs. Working days without a submitted timesheet are marked as absent/leave.
+              </p>
             </div>
 
             <div>

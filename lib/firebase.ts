@@ -66,6 +66,7 @@ export interface EmployeeData {
   jobType?: string;
   monthStartDate?: string;
   monthEndDate?: string;
+  weekendDays?: string[]; // e.g. ["Saturday", "Sunday"]
   salaryStructure?: EmployeeSalaryStructure;
   isLocked?: boolean;
   lockedAt?: string;
@@ -2617,8 +2618,8 @@ export function calculateMonthlyTimesheetAbsences(
     const dateObj = new Date(year, monthIndex, d);
     const dayOfWeek = dateObj.getDay(); // 0 = Sun, 6 = Sat
 
-    // 1. Check Weekend (Saturday & Sunday) -> Exempt
-    if (dayOfWeek === 0 || dayOfWeek === 6) {
+    // 1. Check Weekend using employee configured weekend days -> Exempt
+    if (isEmployeeWeekend(dateObj, employee.weekendDays)) {
       weekendDays++;
       continue;
     }
@@ -2801,6 +2802,128 @@ export function getPayrollCycleDateRange(
     startDateStr: formatDate(startDate),
     endDateStr: formatDate(endDate),
     totalCycleDays,
+  };
+}
+
+export const ALL_WEEKDAYS = [
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+  "Sunday",
+] as const;
+
+export type WeekdayName = typeof ALL_WEEKDAYS[number];
+
+export function isEmployeeWeekend(date: Date, employeeWeekendDays?: string[]): boolean {
+  const weekendDays =
+    employeeWeekendDays && employeeWeekendDays.length > 0
+      ? employeeWeekendDays
+      : ["Saturday", "Sunday"];
+  const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+  const nameOfDay = dayNames[date.getDay()];
+  return weekendDays.includes(nameOfDay);
+}
+
+export interface CycleAbsenceSummary {
+  totalCycleDays: number;
+  weekendDaysCount: number;
+  holidayDaysCount: number;
+  approvedLeaveDays: number;
+  submittedTimesheetDays: number;
+  unappliedTimesheetDays: number;
+  totalAbsentDays: number;
+}
+
+export function calculateCycleAbsences(
+  employee: EmployeeData,
+  startDate: Date,
+  endDate: Date,
+  timesheets: TimesheetEntry[] = [],
+  leaves: LeaveRequest[] = [],
+  wfhList: WFHRequest[] = [],
+  holidays: HolidayItem[] = []
+): CycleAbsenceSummary {
+  const today = new Date();
+  today.setHours(23, 59, 59, 999);
+
+  const joiningDateStr = employee.dateOfJoining;
+  const joiningDate = joiningDateStr ? new Date(joiningDateStr) : null;
+
+  const timesheetDates = new Set<string>();
+  (timesheets || []).forEach((ts) => {
+    if (ts && ts.date) timesheetDates.add(ts.date);
+  });
+
+  const holidayDateSet = new Set<string>();
+  (holidays || []).forEach((h) => {
+    if (h && h.date) holidayDateSet.add(h.date);
+  });
+
+  const isApprovedLeave = (dateStr: string) => {
+    return (leaves || []).some((l) => {
+      if (l.status === "Rejected") return false;
+      return dateStr >= l.fromDate && dateStr <= l.toDate;
+    });
+  };
+
+  const isApprovedWFH = (dateStr: string) => {
+    return (wfhList || []).some((w) => {
+      if (w.status !== "Approved") return false;
+      return dateStr >= w.fromDate && dateStr <= w.toDate;
+    });
+  };
+
+  const formatDateStr = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+  let totalCycleDays = 0;
+  let weekendDaysCount = 0;
+  let holidayDaysCount = 0;
+  let approvedLeaveDays = 0;
+  let submittedTimesheetDays = 0;
+  let unappliedTimesheetDays = 0;
+
+  const curDate = new Date(startDate);
+  while (curDate <= endDate) {
+    totalCycleDays++;
+    const dStr = formatDateStr(curDate);
+    const isWeekend = isEmployeeWeekend(curDate, employee.weekendDays);
+
+    if (isWeekend) {
+      weekendDaysCount++;
+    } else if (holidayDateSet.has(dStr)) {
+      holidayDaysCount++;
+    } else if (isApprovedLeave(dStr)) {
+      approvedLeaveDays++;
+    } else {
+      const isPastOrToday = curDate <= today;
+      const isAfterJoining =
+        !joiningDate ||
+        isNaN(joiningDate.getTime()) ||
+        curDate >= new Date(joiningDate.getFullYear(), joiningDate.getMonth(), joiningDate.getDate());
+
+      if (timesheetDates.has(dStr) || isApprovedWFH(dStr)) {
+        submittedTimesheetDays++;
+      } else if (isPastOrToday && isAfterJoining) {
+        // Missing timesheet on a working day -> unapplied timesheet absence
+        unappliedTimesheetDays++;
+      }
+    }
+
+    curDate.setDate(curDate.getDate() + 1);
+  }
+
+  return {
+    totalCycleDays,
+    weekendDaysCount,
+    holidayDaysCount,
+    approvedLeaveDays,
+    submittedTimesheetDays,
+    unappliedTimesheetDays,
+    totalAbsentDays: approvedLeaveDays + unappliedTimesheetDays,
   };
 }
 

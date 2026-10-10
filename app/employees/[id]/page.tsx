@@ -55,6 +55,9 @@ import {
   deleteSavedPayslip,
   buildPayslipForMonth,
   getPayrollCycleDateRange,
+  ALL_WEEKDAYS,
+  isEmployeeWeekend,
+  calculateCycleAbsences,
 } from "@/lib/firebase";
 import {
   ArrowLeft,
@@ -99,6 +102,7 @@ import {
   ArrowUpRight,
   MinusCircle,
   X,
+  Check,
 } from "lucide-react";
 
 // Helper to determine fiscal quarter based on month (1-indexed)
@@ -1291,6 +1295,45 @@ export default function EmployeeDetailPage({
                     />
                   </div>
 
+                  {/* Weekend Days Multi-select */}
+                  <div className="sm:col-span-2 md:col-span-4">
+                    <label className="block font-semibold text-gray-700 mb-1.5">
+                      Weekend Days (Weekly Off Days)
+                    </label>
+                    <div className="flex flex-wrap gap-2">
+                      {ALL_WEEKDAYS.map((day) => {
+                        const current =
+                          editFormData.weekendDays && editFormData.weekendDays.length > 0
+                            ? editFormData.weekendDays
+                            : ["Saturday", "Sunday"];
+                        const isSelected = current.includes(day);
+                        return (
+                          <button
+                            key={day}
+                            type="button"
+                            onClick={() => {
+                              const next = isSelected
+                                ? current.filter((d) => d !== day)
+                                : [...current, day];
+                              setEditFormData({ ...editFormData, weekendDays: next });
+                            }}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all cursor-pointer flex items-center space-x-1.5 ${
+                              isSelected
+                                ? "bg-[#0B4FBA] text-white border-[#0B4FBA] shadow-xs"
+                                : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
+                            }`}
+                          >
+                            <span>{day}</span>
+                            {isSelected && <Check className="w-3.5 h-3.5" />}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <p className="text-[11px] text-gray-400 mt-1">
+                      Selected days are exempt as weekly offs. Working days without a submitted timesheet are marked as an absence/leave.
+                    </p>
+                  </div>
+
                   {/* Account Security & Lock Status Edit */}
                   <div className="sm:col-span-2 md:col-span-4 border-t border-gray-100 pt-3">
                     <div className={`p-4 rounded-xl border flex items-center justify-between transition-all ${editFormData.isLocked ? "bg-red-50/80 border-red-200" : "bg-gray-50 border-gray-200"}`}>
@@ -1410,6 +1453,12 @@ export default function EmployeeDetailPage({
                     <div>
                       <span className="text-gray-400 font-semibold block text-[10px] uppercase">Month End Date</span>
                       <span className="font-medium text-gray-900">Day {employee.monthEndDate || "31"}</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-400 font-semibold block text-[10px] uppercase">Weekend Days</span>
+                      <span className="font-medium text-gray-900">
+                        {(employee.weekendDays && employee.weekendDays.length > 0 ? employee.weekendDays : ["Saturday", "Sunday"]).join(", ")}
+                      </span>
                     </div>
                     <div>
                       <span className="text-gray-400 font-semibold block text-[10px] uppercase">Aadhar Number</span>
@@ -3224,23 +3273,15 @@ export default function EmployeeDetailPage({
                       const genM = parseInt(selectedGenMonth) || 0;
                       const currentCycle = getPayrollCycleDateRange(genY, genM, startDay, endDay);
 
-                      const formatDateStr = (d: Date) =>
-                        `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-
-                      let cycleLeaveDays = 0;
-                      const curDate = new Date(currentCycle.startDate);
-                      while (curDate <= currentCycle.endDate) {
-                        const dStr = formatDateStr(curDate);
-                        const dayOfWeek = curDate.getDay();
-                        const isLeave = (leaves || []).some((l) => {
-                          if (l.status === "Rejected") return false;
-                          return dStr >= l.fromDate && dStr <= l.toDate;
-                        });
-                        if (isLeave && dayOfWeek !== 0 && dayOfWeek !== 6) {
-                          cycleLeaveDays++;
-                        }
-                        curDate.setDate(curDate.getDate() + 1);
-                      }
+                      const cycleAbsences = calculateCycleAbsences(
+                        employee,
+                        currentCycle.startDate,
+                        currentCycle.endDate,
+                        timesheets,
+                        leaves,
+                        wfhList,
+                        holidays
+                      );
 
                       return (
                         <div className="p-4 border-b border-gray-100 bg-gray-50/50 space-y-3">
@@ -3305,7 +3346,7 @@ export default function EmployeeDetailPage({
                                     const checked = e.target.checked;
                                     setApplyGenLeavesDeduction(checked);
                                     if (checked) {
-                                      const days = parseFloat(genAbsentDays) > 0 ? parseFloat(genAbsentDays) : (cycleLeaveDays > 0 ? cycleLeaveDays : 1);
+                                      const days = parseFloat(genAbsentDays) > 0 ? parseFloat(genAbsentDays) : (cycleAbsences.totalAbsentDays > 0 ? cycleAbsences.totalAbsentDays : 1);
                                       setGenAbsentDays(days.toString());
                                       const amt = calculateAbsenceDeduction(days, genY, genM, currentGross);
                                       setGenDeductionAmount(amt.toString());
@@ -3424,31 +3465,46 @@ export default function EmployeeDetailPage({
                             </div>
                           </div>
 
-                          {/* Payroll Cycle & Recorded Leaves Indicator Banner */}
-                          <div className="flex flex-wrap items-center gap-2.5 text-xs bg-blue-50/70 border border-blue-200/80 px-3.5 py-2 rounded-xl text-blue-950 font-medium">
-                            <div className="flex items-center space-x-1.5">
-                              <Calendar className="w-3.5 h-3.5 text-[#0B4FBA]" />
-                              <span>Payroll Cycle: <strong>{currentCycle.startDateStr}</strong> to <strong>{currentCycle.endDateStr}</strong> ({currentCycle.totalCycleDays} days)</span>
+                          {/* Payroll Cycle & Absences / Leaves Breakdown Banner */}
+                          <div className="flex flex-wrap items-center justify-between gap-3 text-xs bg-blue-50/70 border border-blue-200/80 px-3.5 py-2.5 rounded-xl text-blue-950 font-medium">
+                            <div className="flex flex-wrap items-center gap-2.5">
+                              <div className="flex items-center space-x-1.5">
+                                <Calendar className="w-3.5 h-3.5 text-[#0B4FBA]" />
+                                <span>Cycle: <strong>{currentCycle.startDateStr}</strong> to <strong>{currentCycle.endDateStr}</strong> ({currentCycle.totalCycleDays}d)</span>
+                              </div>
+                              <span className="text-blue-300 hidden sm:inline">•</span>
+                              <div className="flex items-center space-x-1">
+                                <span className="text-gray-500">Weekends:</span>
+                                <span className="font-semibold text-gray-800">
+                                  {(employee?.weekendDays && employee.weekendDays.length > 0 ? employee.weekendDays : ["Saturday", "Sunday"]).join(", ")}
+                                </span>
+                              </div>
+                              <span className="text-blue-300 hidden sm:inline">•</span>
+                              <div className="flex items-center space-x-1.5">
+                                <span>Absences / Leaves:</span>
+                                <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${cycleAbsences.totalAbsentDays > 0 ? "bg-rose-100 text-rose-700 border border-rose-200" : "bg-emerald-100 text-emerald-700 border border-emerald-200"}`}>
+                                  {cycleAbsences.totalAbsentDays} {cycleAbsences.totalAbsentDays === 1 ? "day" : "days"}
+                                </span>
+                                {cycleAbsences.totalAbsentDays > 0 && (
+                                  <span className="text-[11px] text-gray-500">
+                                    ({cycleAbsences.unappliedTimesheetDays} missing timesheet + {cycleAbsences.approvedLeaveDays} approved leave)
+                                  </span>
+                                )}
+                              </div>
                             </div>
-                            <span className="text-blue-300 hidden sm:inline">•</span>
-                            <div className="flex items-center space-x-1.5">
-                              <span>Leaves in this cycle:</span>
-                              <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${cycleLeaveDays > 0 ? "bg-rose-100 text-rose-700 border border-rose-200" : "bg-emerald-100 text-emerald-700 border border-emerald-200"}`}>
-                                {cycleLeaveDays} {cycleLeaveDays === 1 ? "day" : "days"}
-                              </span>
-                            </div>
-                            {cycleLeaveDays > 0 && !applyGenLeavesDeduction && (
+
+                            {cycleAbsences.totalAbsentDays > 0 && !applyGenLeavesDeduction && (
                               <button
                                 type="button"
                                 onClick={() => {
                                   setApplyGenLeavesDeduction(true);
-                                  setGenAbsentDays(cycleLeaveDays.toString());
-                                  const amt = calculateAbsenceDeduction(cycleLeaveDays, genY, genM, currentGross);
+                                  setGenAbsentDays(cycleAbsences.totalAbsentDays.toString());
+                                  const amt = calculateAbsenceDeduction(cycleAbsences.totalAbsentDays, genY, genM, currentGross);
                                   setGenDeductionAmount(amt.toString());
                                 }}
-                                className="ml-auto text-[11px] font-bold text-[#0B4FBA] bg-white hover:bg-blue-100 border border-blue-200 px-2.5 py-1 rounded-md transition-all cursor-pointer shadow-2xs"
+                                className="text-[11px] font-bold text-[#0B4FBA] bg-white hover:bg-blue-100 border border-blue-200 px-3 py-1 rounded-md transition-all cursor-pointer shadow-2xs whitespace-nowrap"
                               >
-                                + Enable & Deduct {cycleLeaveDays}d Leaves
+                                + Apply Deduction for {cycleAbsences.totalAbsentDays}d Absent/Leave
                               </button>
                             )}
                           </div>
@@ -3843,12 +3899,6 @@ export default function EmployeeDetailPage({
                       <span className="w-28 font-semibold text-gray-500">Paid Days:</span>
                       <span className="font-bold text-gray-900">{previewPayslip.paidDays} / {previewPayslip.workingDays} Days</span>
                     </div>
-                    {previewPayslip.absentDays && previewPayslip.absentDays > 0 ? (
-                      <div className="flex">
-                        <span className="w-28 font-semibold text-gray-500">Absent Days:</span>
-                        <span className="font-bold text-rose-600">{previewPayslip.absentDays} Days</span>
-                      </div>
-                    ) : null}
                   </div>
                 </div>
 
