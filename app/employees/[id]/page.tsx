@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, use } from "react";
+import { useEffect, useState, use, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import AdminLayout from "../../components/AdminLayout";
@@ -112,6 +112,30 @@ function getQuarterFromDateStr(dateStr: string): string {
   return "Q4"; // 1, 2, 3
 }
 
+const PAYSLIP_MONTH_OPTIONS = [
+  { value: "0", label: "January" },
+  { value: "1", label: "February" },
+  { value: "2", label: "March" },
+  { value: "3", label: "April" },
+  { value: "4", label: "May" },
+  { value: "5", label: "June" },
+  { value: "6", label: "July" },
+  { value: "7", label: "August" },
+  { value: "8", label: "September" },
+  { value: "9", label: "October" },
+  { value: "10", label: "November" },
+  { value: "11", label: "December" },
+];
+
+function getPayslipYearOptions(): { value: string; label: string }[] {
+  const currentYear = new Date().getFullYear();
+  // Present year and past 10 years (11 years total)
+  return Array.from({ length: 11 }, (_, i) => {
+    const y = (currentYear - i).toString();
+    return { value: y, label: y };
+  });
+}
+
 export default function EmployeeDetailPage({
   params,
 }: {
@@ -213,14 +237,15 @@ export default function EmployeeDetailPage({
   const [newDeductionAmount, setNewDeductionAmount] = useState("");
   const [savingSalary, setSavingSalary] = useState(false);
   const [salarySuccessMsg, setSalarySuccessMsg] = useState("");
-  const [payslipsYear, setPayslipsYear] = useState("2026");
+  const [payslipsYear, setPayslipsYear] = useState("All");
   const [previewPayslip, setPreviewPayslip] = useState<MonthlyPayslip | null>(null);
   const [holidays, setHolidays] = useState<HolidayItem[]>([]);
   const [savedPayslips, setSavedPayslips] = useState<MonthlyPayslip[]>([]);
-  const [selectedGenMonth, setSelectedGenMonth] = useState<string>("7"); // 7 = August (0-indexed)
-  const [selectedGenYear, setSelectedGenYear] = useState<string>("2026");
+  const [selectedGenMonth, setSelectedGenMonth] = useState<string>(() => new Date().getMonth().toString());
+  const [selectedGenYear, setSelectedGenYear] = useState<string>(() => new Date().getFullYear().toString());
   const [generatingPayslip, setGeneratingPayslip] = useState(false);
   const [deletingPayslipId, setDeletingPayslipId] = useState<string | null>(null);
+  const payslipYearOptions = useMemo(() => getPayslipYearOptions(), []);
 
   // Load employee details and tab datasets
   useEffect(() => {
@@ -278,14 +303,8 @@ export default function EmployeeDetailPage({
           setDeductionsList(salaryData.deductions || []);
           setHolidays(holidaysData);
 
-          let currentSaved = savedPayslipsData;
-          if (currentSaved.length === 0 && emp) {
-            const initialAug = buildPayslipForMonth(emp, salaryData, 2026, 7, tsData, leaveData, wfhData, holidaysData);
-            const savedAug = await saveGeneratedPayslip(initialAug);
-            currentSaved = [savedAug];
-          }
           const pMap = new Map<string, MonthlyPayslip>();
-          currentSaved.forEach((p) => {
+          savedPayslipsData.forEach((p) => {
             pMap.set(`${p.employeeId}-${p.year}-${p.monthIndex}`, p);
           });
           setSavedPayslips(Array.from(pMap.values()).sort((a, b) => b.year - a.year || b.monthIndex - a.monthIndex));
@@ -2644,7 +2663,7 @@ export default function EmployeeDetailPage({
                   totalDeductions: currentDeductions,
                   netPay: currentNet,
                 },
-                parseInt(payslipsYear) || 2026,
+                parseInt(payslipsYear) || new Date().getFullYear(),
                 timesheets,
                 leaves,
                 wfhList,
@@ -3066,19 +3085,25 @@ export default function EmployeeDetailPage({
 
                       {/* Controls: Generate Payslip Inline Bar */}
                       <div className="flex flex-wrap items-center gap-2">
-                        {/* Month Selector */}
+                        {/* Filter by Year for Table */}
                         <div className="w-28">
                           <CustomDropdown
                             options={[
-                              { value: "0", label: "January" },
-                              { value: "1", label: "February" },
-                              { value: "2", label: "March" },
-                              { value: "3", label: "April" },
-                              { value: "4", label: "May" },
-                              { value: "5", label: "June" },
-                              { value: "6", label: "July" },
-                              { value: "7", label: "August" },
+                              { value: "All", label: "All Years" },
+                              ...payslipYearOptions,
                             ]}
+                            value={payslipsYear}
+                            onChange={(val) => setPayslipsYear(val)}
+                            placeholder="Filter Year"
+                          />
+                        </div>
+
+                        <div className="h-6 w-px bg-gray-200 hidden sm:block mx-0.5" />
+
+                        {/* Month Selector */}
+                        <div className="w-32">
+                          <CustomDropdown
+                            options={PAYSLIP_MONTH_OPTIONS}
                             value={selectedGenMonth}
                             onChange={(val) => setSelectedGenMonth(val)}
                             placeholder="Select month"
@@ -3088,10 +3113,7 @@ export default function EmployeeDetailPage({
                         {/* Year Selector for Generation */}
                         <div className="w-24">
                           <CustomDropdown
-                            options={[
-                              { value: "2026", label: "2026" },
-                              { value: "2025", label: "2025" },
-                            ]}
+                            options={payslipYearOptions}
                             value={selectedGenYear}
                             onChange={(val) => setSelectedGenYear(val)}
                             placeholder="Year"
@@ -3119,7 +3141,7 @@ export default function EmployeeDetailPage({
                                 netPay: currentGross - currentDeductions,
                               };
 
-                              const y = parseInt(selectedGenYear) || 2026;
+                              const y = parseInt(selectedGenYear) || new Date().getFullYear();
                               const m = parseInt(selectedGenMonth);
 
                               const built = buildPayslipForMonth(
@@ -3240,8 +3262,14 @@ export default function EmployeeDetailPage({
                                         if (!confirm(`Are you sure you want to delete the generated payslip for ${payslip.month}?`)) return;
                                         setDeletingPayslipId(payslip.id);
                                         try {
-                                          await deleteSavedPayslip(payslip.id);
-                                          setSavedPayslips((prev) => prev.filter((p) => p.id !== payslip.id));
+                                          await deleteSavedPayslip(payslip.id, payslip.employeeId, payslip.year, payslip.monthIndex);
+                                          setSavedPayslips((prev) =>
+                                            prev.filter(
+                                              (p) =>
+                                                p.id !== payslip.id &&
+                                                !(p.employeeId === payslip.employeeId && p.year === payslip.year && p.monthIndex === payslip.monthIndex)
+                                            )
+                                          );
                                         } catch (err) {
                                           console.error("Delete error:", err);
                                         } finally {

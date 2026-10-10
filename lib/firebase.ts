@@ -2832,7 +2832,8 @@ export async function getSavedPayslipsForEmployee(
     );
     const snapshot = await getDocs(q);
     snapshot.forEach((docSnap) => {
-      const data = { id: docSnap.id, ...docSnap.data() } as MonthlyPayslip;
+      // Prioritize docSnap.id as the true unique identifier
+      const data = { ...docSnap.data(), id: docSnap.id } as MonthlyPayslip;
       const key = `${data.employeeId}-${data.year}-${data.monthIndex}`;
       payslipMap.set(key, data);
     });
@@ -2868,12 +2869,29 @@ export async function saveGeneratedPayslip(payslip: MonthlyPayslip): Promise<Mon
   };
 
   try {
+    // If the payslip has a Firestore doc id (does not start with mock prefix "payslip-"), update it
     if (itemToSave.id && !itemToSave.id.startsWith("payslip-")) {
       const { id, ...data } = itemToSave;
       await updateDoc(doc(db, "payslips", itemToSave.id), data);
     } else {
-      const docRef = await addDoc(collection(db, "payslips"), itemToSave);
-      itemToSave.id = docRef.id;
+      // Check if an existing doc exists in Firestore for this employee, year, monthIndex
+      const q = query(
+        collection(db, "payslips"),
+        where("employeeId", "==", payslip.employeeId),
+        where("year", "==", payslip.year),
+        where("monthIndex", "==", payslip.monthIndex)
+      );
+      const snap = await getDocs(q);
+      if (!snap.empty) {
+        const docRef = snap.docs[0].ref;
+        const { id, ...data } = itemToSave;
+        await updateDoc(docRef, data);
+        itemToSave.id = docRef.id;
+      } else {
+        const { id, ...data } = itemToSave;
+        const docRef = await addDoc(collection(db, "payslips"), data);
+        itemToSave.id = docRef.id;
+      }
     }
   } catch (e) {
     if (!itemToSave.id) {
@@ -2894,19 +2912,62 @@ export async function saveGeneratedPayslip(payslip: MonthlyPayslip): Promise<Mon
   return itemToSave;
 }
 
-export async function deleteSavedPayslip(id: string): Promise<boolean> {
+export async function deleteSavedPayslip(
+  id: string,
+  employeeId?: string,
+  year?: number,
+  monthIndex?: number
+): Promise<boolean> {
+  // 1. Delete from Firestore by document id if it is a Firestore doc id
   try {
     if (id && !id.startsWith("payslip-")) {
       await deleteDoc(doc(db, "payslips", id));
     }
   } catch (e) {}
 
+  // 2. Also search and delete from Firestore by employeeId, year, monthIndex
+  try {
+    if (employeeId && year !== undefined && monthIndex !== undefined) {
+      const q = query(
+        collection(db, "payslips"),
+        where("employeeId", "==", employeeId),
+        where("year", "==", year),
+        where("monthIndex", "==", monthIndex)
+      );
+      const snap = await getDocs(q);
+      const promises = snap.docs.map((d) => deleteDoc(d.ref));
+      await Promise.all(promises);
+    }
+  } catch (e) {}
+
+  // 3. Search and delete if Firestore document had an internal id field equal to this id
+  try {
+    if (id) {
+      const q = query(
+        collection(db, "payslips"),
+        where("id", "==", id)
+      );
+      const snap = await getDocs(q);
+      const promises = snap.docs.map((d) => deleteDoc(d.ref));
+      await Promise.all(promises);
+    }
+  } catch (e) {}
+
+  // 4. Delete from localStorage
   if (typeof window !== "undefined") {
     const existingStr = localStorage.getItem(LOCAL_STORAGE_KEY_SAVED_PAYSLIPS);
     if (existingStr) {
       try {
         const existing: MonthlyPayslip[] = JSON.parse(existingStr);
-        const filtered = existing.filter((p) => p.id !== id);
+        const filtered = existing.filter((p) => {
+          if (p.id === id) return false;
+          if (employeeId && year !== undefined && monthIndex !== undefined) {
+            if (p.employeeId === employeeId && p.year === year && p.monthIndex === monthIndex) {
+              return false;
+            }
+          }
+          return true;
+        });
         localStorage.setItem(LOCAL_STORAGE_KEY_SAVED_PAYSLIPS, JSON.stringify(filtered));
       } catch (e) {}
     }
