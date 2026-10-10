@@ -54,6 +54,7 @@ import {
   saveGeneratedPayslip,
   deleteSavedPayslip,
   buildPayslipForMonth,
+  getPayrollCycleDateRange,
 } from "@/lib/firebase";
 import {
   ArrowLeft,
@@ -135,6 +136,11 @@ function getPayslipYearOptions(): { value: string; label: string }[] {
     return { value: y, label: y };
   });
 }
+
+const DAY_OF_MONTH_OPTIONS = Array.from({ length: 31 }, (_, i) => ({
+  value: (i + 1).toString(),
+  label: `${i + 1}`,
+}));
 
 export default function EmployeeDetailPage({
   params,
@@ -245,7 +251,122 @@ export default function EmployeeDetailPage({
   const [selectedGenYear, setSelectedGenYear] = useState<string>(() => new Date().getFullYear().toString());
   const [generatingPayslip, setGeneratingPayslip] = useState(false);
   const [deletingPayslipId, setDeletingPayslipId] = useState<string | null>(null);
+  const [genAbsentDays, setGenAbsentDays] = useState<string>("0");
+  const [genDeductionAmount, setGenDeductionAmount] = useState<string>("0");
+  const [applyGenLeavesDeduction, setApplyGenLeavesDeduction] = useState<boolean>(false);
+  const [editingPayslip, setEditingPayslip] = useState<MonthlyPayslip | null>(null);
+  const [editAbsentDays, setEditAbsentDays] = useState<string>("0");
+  const [editDeductionAmount, setEditDeductionAmount] = useState<string>("0");
+  const [editApplyLeavesDeduction, setEditApplyLeavesDeduction] = useState<boolean>(true);
+  const [savingEditPayslip, setSavingEditPayslip] = useState(false);
   const payslipYearOptions = useMemo(() => getPayslipYearOptions(), []);
+
+  // Helper to calculate leaves deduction amount based on gross and days in payroll cycle
+  const calculateAbsenceDeduction = (days: number, yearNum: number, monthNum: number, gross: number) => {
+    if (days <= 0 || gross <= 0) return 0;
+    const startDay = parseInt(employee?.monthStartDate || "1") || 1;
+    const endDay = parseInt(employee?.monthEndDate || "31") || 31;
+    const cycle = getPayrollCycleDateRange(yearNum, monthNum, startDay, endDay);
+    const totalDays = cycle.totalCycleDays || new Date(yearNum, monthNum + 1, 0).getDate();
+    const ratePerDay = totalDays > 0 ? gross / totalDays : 0;
+    return Math.round(days * ratePerDay);
+  };
+
+  const handleGenAbsentDaysChange = (valStr: string) => {
+    setGenAbsentDays(valStr);
+    const days = parseFloat(valStr) || 0;
+    const y = parseInt(selectedGenYear) || new Date().getFullYear();
+    const m = parseInt(selectedGenMonth) || 0;
+    const currentGross = earningsList.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+    const calculated = calculateAbsenceDeduction(days, y, m, currentGross);
+    setGenDeductionAmount(calculated.toString());
+    if (days > 0) {
+      setApplyGenLeavesDeduction(true);
+    } else {
+      setApplyGenLeavesDeduction(false);
+    }
+  };
+
+  const handleGenDeductionAmountChange = (valStr: string) => {
+    setGenDeductionAmount(valStr);
+    const amt = parseFloat(valStr) || 0;
+    if (amt > 0) {
+      setApplyGenLeavesDeduction(true);
+    }
+  };
+
+  const openEditPayslipModal = (payslip: MonthlyPayslip) => {
+    setEditingPayslip(payslip);
+    const initialAbsent = payslip.absentDays !== undefined ? payslip.absentDays.toString() : (
+      payslip.workingDays > payslip.paidDays ? (payslip.workingDays - payslip.paidDays).toString() : "0"
+    );
+    const leavesItem = payslip.deductions.find((d) => d.name === "Leaves");
+    const initialAmount = payslip.leaveDeductionAmount !== undefined
+      ? payslip.leaveDeductionAmount.toString()
+      : (leavesItem ? leavesItem.amount.toString() : "0");
+
+    setEditAbsentDays(initialAbsent);
+    setEditDeductionAmount(initialAmount);
+    setEditApplyLeavesDeduction(parseFloat(initialAmount) > 0 || parseFloat(initialAbsent) > 0);
+  };
+
+  const handleEditAbsentDaysChange = (valStr: string) => {
+    setEditAbsentDays(valStr);
+    const days = parseFloat(valStr) || 0;
+    if (editingPayslip) {
+      const calculated = calculateAbsenceDeduction(days, editingPayslip.year, editingPayslip.monthIndex, editingPayslip.grossSalary);
+      setEditDeductionAmount(calculated.toString());
+      if (days > 0) {
+        setEditApplyLeavesDeduction(true);
+      }
+    }
+  };
+
+  const handleSaveEditedPayslip = async () => {
+    if (!editingPayslip) return;
+    setSavingEditPayslip(true);
+    try {
+      const days = parseFloat(editAbsentDays) || 0;
+      const amt = parseFloat(editDeductionAmount) || 0;
+      const totalDays = editingPayslip.workingDays || new Date(editingPayslip.year, editingPayslip.monthIndex + 1, 0).getDate();
+      const paidDays = Math.max(0, totalDays - (editApplyLeavesDeduction ? days : 0));
+
+      let updatedDeductions = editingPayslip.deductions.filter((d) => d.name !== "Leaves");
+      if (editApplyLeavesDeduction && amt > 0) {
+        updatedDeductions.push({
+          id: `ded-lop-${editingPayslip.year}-${editingPayslip.monthIndex + 1}`,
+          name: "Leaves",
+          amount: amt,
+        });
+      }
+
+      const totalDeductions = updatedDeductions.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+      const netPay = Math.max(0, editingPayslip.grossSalary - totalDeductions);
+
+      const updated: MonthlyPayslip = {
+        ...editingPayslip,
+        paidDays,
+        absentDays: editApplyLeavesDeduction ? days : 0,
+        leaveDeductionAmount: editApplyLeavesDeduction ? amt : 0,
+        deductions: updatedDeductions,
+        totalDeductions,
+        netPay,
+      };
+
+      const saved = await saveGeneratedPayslip(updated);
+      setSavedPayslips((prev) =>
+        prev.map((p) => (p.id === saved.id || (p.employeeId === saved.employeeId && p.year === saved.year && p.monthIndex === saved.monthIndex) ? saved : p))
+      );
+      setEditingPayslip(null);
+      setSalarySuccessMsg(`Payslip for ${saved.month} updated successfully!`);
+      setTimeout(() => setSalarySuccessMsg(""), 4000);
+    } catch (err) {
+      console.error("Save edited payslip error:", err);
+      alert("Failed to update payslip.");
+    } finally {
+      setSavingEditPayslip(false);
+    }
+  };
 
   // Load employee details and tab datasets
   useEffect(() => {
@@ -1150,6 +1271,26 @@ export default function EmployeeDetailPage({
                     />
                   </div>
 
+                  <div>
+                    <label className="block font-semibold text-gray-700 mb-1">Month Start Date (Day 1 - 31)</label>
+                    <CustomDropdown
+                      options={DAY_OF_MONTH_OPTIONS}
+                      value={editFormData.monthStartDate || "1"}
+                      onChange={(val) => setEditFormData({ ...editFormData, monthStartDate: val })}
+                      placeholder="Start Day (1-31)"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-semibold text-gray-700 mb-1">Month End Date (Day 1 - 31)</label>
+                    <CustomDropdown
+                      options={DAY_OF_MONTH_OPTIONS}
+                      value={editFormData.monthEndDate || "31"}
+                      onChange={(val) => setEditFormData({ ...editFormData, monthEndDate: val })}
+                      placeholder="End Day (1-31)"
+                    />
+                  </div>
+
                   {/* Account Security & Lock Status Edit */}
                   <div className="sm:col-span-2 md:col-span-4 border-t border-gray-100 pt-3">
                     <div className={`p-4 rounded-xl border flex items-center justify-between transition-all ${editFormData.isLocked ? "bg-red-50/80 border-red-200" : "bg-gray-50 border-gray-200"}`}>
@@ -1261,6 +1402,14 @@ export default function EmployeeDetailPage({
                     <div>
                       <span className="text-gray-400 font-semibold block text-[10px] uppercase">Date of Joining</span>
                       <span className="font-medium text-gray-900">{employee.dateOfJoining}</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-400 font-semibold block text-[10px] uppercase">Month Start Date</span>
+                      <span className="font-medium text-gray-900">Day {employee.monthStartDate || "1"}</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-400 font-semibold block text-[10px] uppercase">Month End Date</span>
+                      <span className="font-medium text-gray-900">Day {employee.monthEndDate || "31"}</span>
                     </div>
                     <div>
                       <span className="text-gray-400 font-semibold block text-[10px] uppercase">Aadhar Number</span>
@@ -3068,119 +3217,244 @@ export default function EmployeeDetailPage({
 
                   {/* Official Generated Payslips Table */}
                   <div className="bg-white rounded-xl border border-gray-200/80 shadow-2xs overflow-hidden">
-                    <div className="p-4 border-b border-gray-100 flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-gray-50/50">
-                      <div className="flex items-center space-x-2">
-                        <div className="p-1.5 bg-blue-50 text-[#0B4FBA] rounded-lg">
-                          <FileSpreadsheet className="w-4 h-4" />
+                    {(() => {
+                      const startDay = parseInt(employee?.monthStartDate || "1") || 1;
+                      const endDay = parseInt(employee?.monthEndDate || "31") || 31;
+                      const genY = parseInt(selectedGenYear) || new Date().getFullYear();
+                      const genM = parseInt(selectedGenMonth) || 0;
+                      const currentCycle = getPayrollCycleDateRange(genY, genM, startDay, endDay);
+
+                      const formatDateStr = (d: Date) =>
+                        `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+                      let cycleLeaveDays = 0;
+                      const curDate = new Date(currentCycle.startDate);
+                      while (curDate <= currentCycle.endDate) {
+                        const dStr = formatDateStr(curDate);
+                        const dayOfWeek = curDate.getDay();
+                        const isLeave = (leaves || []).some((l) => {
+                          if (l.status === "Rejected") return false;
+                          return dStr >= l.fromDate && dStr <= l.toDate;
+                        });
+                        if (isLeave && dayOfWeek !== 0 && dayOfWeek !== 6) {
+                          cycleLeaveDays++;
+                        }
+                        curDate.setDate(curDate.getDate() + 1);
+                      }
+
+                      return (
+                        <div className="p-4 border-b border-gray-100 bg-gray-50/50 space-y-3">
+                          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                            <div className="flex items-center space-x-2">
+                              <div className="p-1.5 bg-blue-50 text-[#0B4FBA] rounded-lg">
+                                <FileSpreadsheet className="w-4 h-4" />
+                              </div>
+                              <div>
+                                <h3 className="font-bold text-xs text-gray-900">
+                                  Generated & Published Payslips ({savedPayslips.filter((p) => payslipsYear === "All" || String(p.year) === payslipsYear).length})
+                                </h3>
+                                <p className="text-[11px] text-gray-500">
+                                  Only officially generated payslips are saved and visible in the employee app
+                                </p>
+                              </div>
+                            </div>
+
+                            {/* Controls: Generate Payslip Inline Bar */}
+                            <div className="flex flex-wrap items-center gap-2">
+                              {/* Filter by Year for Table */}
+                              <div className="w-28">
+                                <CustomDropdown
+                                  options={[
+                                    { value: "All", label: "All Years" },
+                                    ...payslipYearOptions,
+                                  ]}
+                                  value={payslipsYear}
+                                  onChange={(val) => setPayslipsYear(val)}
+                                  placeholder="Filter Year"
+                                />
+                              </div>
+
+                              <div className="h-6 w-px bg-gray-200 hidden sm:block mx-0.5" />
+
+                              {/* Month Selector */}
+                              <div className="w-32">
+                                <CustomDropdown
+                                  options={PAYSLIP_MONTH_OPTIONS}
+                                  value={selectedGenMonth}
+                                  onChange={(val) => setSelectedGenMonth(val)}
+                                  placeholder="Select month"
+                                />
+                              </div>
+
+                              {/* Year Selector for Generation */}
+                              <div className="w-24">
+                                <CustomDropdown
+                                  options={payslipYearOptions}
+                                  value={selectedGenYear}
+                                  onChange={(val) => setSelectedGenYear(val)}
+                                  placeholder="Year"
+                                />
+                              </div>
+
+                              {/* Enable / Apply Deduction Toggle */}
+                              <label className={`flex items-center space-x-1.5 cursor-pointer select-none px-2.5 py-1.5 rounded-lg border transition-all shadow-2xs ${applyGenLeavesDeduction ? "bg-blue-50 border-blue-300 text-[#0B4FBA]" : "bg-white border-gray-300 text-gray-700 hover:bg-gray-50"}`}>
+                                <input
+                                  type="checkbox"
+                                  checked={applyGenLeavesDeduction}
+                                  onChange={(e) => {
+                                    const checked = e.target.checked;
+                                    setApplyGenLeavesDeduction(checked);
+                                    if (checked) {
+                                      const days = parseFloat(genAbsentDays) > 0 ? parseFloat(genAbsentDays) : (cycleLeaveDays > 0 ? cycleLeaveDays : 1);
+                                      setGenAbsentDays(days.toString());
+                                      const amt = calculateAbsenceDeduction(days, genY, genM, currentGross);
+                                      setGenDeductionAmount(amt.toString());
+                                    } else {
+                                      setGenAbsentDays("0");
+                                      setGenDeductionAmount("0");
+                                    }
+                                  }}
+                                  className="w-3.5 h-3.5 text-[#0B4FBA] rounded border-gray-300 focus:ring-[#0B4FBA]"
+                                />
+                                <span className="text-[11px] font-semibold whitespace-nowrap">
+                                  {applyGenLeavesDeduction ? "Leave Deductions: Enabled" : "Enable Leave Deductions"}
+                                </span>
+                              </label>
+
+                              {applyGenLeavesDeduction && (
+                                <>
+                                  {/* Absent Days Input */}
+                                  <div className="flex items-center space-x-1 bg-white border border-gray-300 rounded-lg px-2 py-1 shadow-2xs">
+                                    <span className="text-[11px] font-semibold text-gray-500 whitespace-nowrap">Absent:</span>
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      max={currentCycle.totalCycleDays || 31}
+                                      step="0.5"
+                                      value={genAbsentDays}
+                                      onChange={(e) => handleGenAbsentDaysChange(e.target.value)}
+                                      placeholder="0"
+                                      className="w-12 text-xs font-bold text-gray-900 outline-none text-center"
+                                      title="Number of absent / unpaid leave days"
+                                    />
+                                    <span className="text-[10px] text-gray-400">days</span>
+                                  </div>
+
+                                  {/* Leaves Deduction Amount Input */}
+                                  <div className="flex items-center space-x-1 bg-white border border-gray-300 rounded-lg px-2 py-1 shadow-2xs">
+                                    <span className="text-[11px] font-semibold text-gray-500 whitespace-nowrap">Deduct:</span>
+                                    <span className="text-[11px] text-gray-400">₹</span>
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      value={genDeductionAmount}
+                                      onChange={(e) => handleGenDeductionAmountChange(e.target.value)}
+                                      placeholder="0"
+                                      className="w-16 text-xs font-bold text-gray-900 outline-none text-right"
+                                      title="Leaves deduction amount in ₹ (auto-calculates with days, editable)"
+                                    />
+                                  </div>
+                                </>
+                              )}
+
+                              {/* Generate Button */}
+                              <button
+                                type="button"
+                                disabled={generatingPayslip}
+                                onClick={async () => {
+                                  if (!employee) return;
+                                  setGeneratingPayslip(true);
+                                  try {
+                                    const empKey = employee.id || employee.employeeId;
+                                    const currentGross = earningsList.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+                                    const currentDeductions = deductionsList.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+                                    const currentStructure: EmployeeSalaryStructure = {
+                                      id: salaryStructure?.id,
+                                      employeeId: empKey,
+                                      earnings: earningsList,
+                                      deductions: deductionsList,
+                                      grossSalary: currentGross,
+                                      totalDeductions: currentDeductions,
+                                      netPay: currentGross - currentDeductions,
+                                    };
+
+                                    const y = parseInt(selectedGenYear) || new Date().getFullYear();
+                                    const m = parseInt(selectedGenMonth);
+
+                                    const built = buildPayslipForMonth(
+                                      employee,
+                                      currentStructure,
+                                      y,
+                                      m,
+                                      timesheets,
+                                      leaves,
+                                      wfhList,
+                                      holidays,
+                                      {
+                                        applyLeavesDeduction: applyGenLeavesDeduction,
+                                        absentDays: parseFloat(genAbsentDays) || 0,
+                                        deductionAmount: parseFloat(genDeductionAmount) || 0,
+                                      }
+                                    );
+
+                                    const saved = await saveGeneratedPayslip(built);
+                                    setSavedPayslips((prev) => {
+                                      const filtered = prev.filter((p) => !(p.year === y && p.monthIndex === m));
+                                      return [saved, ...filtered].sort((a, b) => b.year - a.year || b.monthIndex - a.monthIndex);
+                                    });
+
+                                    setSalarySuccessMsg(`Payslip for ${built.month} generated and published successfully!`);
+                                    setTimeout(() => setSalarySuccessMsg(""), 4000);
+                                  } catch (err) {
+                                    console.error("Generate payslip error:", err);
+                                    alert("Failed to generate payslip.");
+                                  } finally {
+                                    setGeneratingPayslip(false);
+                                  }
+                                }}
+                                className="px-3.5 py-1.5 bg-[#0B4FBA] hover:bg-[#003882] text-white text-xs font-semibold rounded-lg shadow-xs transition-all flex items-center space-x-1 disabled:opacity-50 cursor-pointer"
+                              >
+                                {generatingPayslip ? (
+                                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                ) : (
+                                  <Plus className="w-3.5 h-3.5" />
+                                )}
+                                <span>Generate Payslip</span>
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Payroll Cycle & Recorded Leaves Indicator Banner */}
+                          <div className="flex flex-wrap items-center gap-2.5 text-xs bg-blue-50/70 border border-blue-200/80 px-3.5 py-2 rounded-xl text-blue-950 font-medium">
+                            <div className="flex items-center space-x-1.5">
+                              <Calendar className="w-3.5 h-3.5 text-[#0B4FBA]" />
+                              <span>Payroll Cycle: <strong>{currentCycle.startDateStr}</strong> to <strong>{currentCycle.endDateStr}</strong> ({currentCycle.totalCycleDays} days)</span>
+                            </div>
+                            <span className="text-blue-300 hidden sm:inline">•</span>
+                            <div className="flex items-center space-x-1.5">
+                              <span>Leaves in this cycle:</span>
+                              <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${cycleLeaveDays > 0 ? "bg-rose-100 text-rose-700 border border-rose-200" : "bg-emerald-100 text-emerald-700 border border-emerald-200"}`}>
+                                {cycleLeaveDays} {cycleLeaveDays === 1 ? "day" : "days"}
+                              </span>
+                            </div>
+                            {cycleLeaveDays > 0 && !applyGenLeavesDeduction && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setApplyGenLeavesDeduction(true);
+                                  setGenAbsentDays(cycleLeaveDays.toString());
+                                  const amt = calculateAbsenceDeduction(cycleLeaveDays, genY, genM, currentGross);
+                                  setGenDeductionAmount(amt.toString());
+                                }}
+                                className="ml-auto text-[11px] font-bold text-[#0B4FBA] bg-white hover:bg-blue-100 border border-blue-200 px-2.5 py-1 rounded-md transition-all cursor-pointer shadow-2xs"
+                              >
+                                + Enable & Deduct {cycleLeaveDays}d Leaves
+                              </button>
+                            )}
+                          </div>
                         </div>
-                        <div>
-                          <h3 className="font-bold text-xs text-gray-900">
-                            Generated & Published Payslips ({savedPayslips.filter((p) => payslipsYear === "All" || String(p.year) === payslipsYear).length})
-                          </h3>
-                          <p className="text-[11px] text-gray-500">
-                            Only officially generated payslips are saved and visible in the employee app
-                          </p>
-                        </div>
-                      </div>
-
-                      {/* Controls: Generate Payslip Inline Bar */}
-                      <div className="flex flex-wrap items-center gap-2">
-                        {/* Filter by Year for Table */}
-                        <div className="w-28">
-                          <CustomDropdown
-                            options={[
-                              { value: "All", label: "All Years" },
-                              ...payslipYearOptions,
-                            ]}
-                            value={payslipsYear}
-                            onChange={(val) => setPayslipsYear(val)}
-                            placeholder="Filter Year"
-                          />
-                        </div>
-
-                        <div className="h-6 w-px bg-gray-200 hidden sm:block mx-0.5" />
-
-                        {/* Month Selector */}
-                        <div className="w-32">
-                          <CustomDropdown
-                            options={PAYSLIP_MONTH_OPTIONS}
-                            value={selectedGenMonth}
-                            onChange={(val) => setSelectedGenMonth(val)}
-                            placeholder="Select month"
-                          />
-                        </div>
-
-                        {/* Year Selector for Generation */}
-                        <div className="w-24">
-                          <CustomDropdown
-                            options={payslipYearOptions}
-                            value={selectedGenYear}
-                            onChange={(val) => setSelectedGenYear(val)}
-                            placeholder="Year"
-                          />
-                        </div>
-
-                        {/* Generate Button */}
-                        <button
-                          type="button"
-                          disabled={generatingPayslip}
-                          onClick={async () => {
-                            if (!employee) return;
-                            setGeneratingPayslip(true);
-                            try {
-                              const empKey = employee.id || employee.employeeId;
-                              const currentGross = earningsList.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
-                              const currentDeductions = deductionsList.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
-                              const currentStructure: EmployeeSalaryStructure = {
-                                id: salaryStructure?.id,
-                                employeeId: empKey,
-                                earnings: earningsList,
-                                deductions: deductionsList,
-                                grossSalary: currentGross,
-                                totalDeductions: currentDeductions,
-                                netPay: currentGross - currentDeductions,
-                              };
-
-                              const y = parseInt(selectedGenYear) || new Date().getFullYear();
-                              const m = parseInt(selectedGenMonth);
-
-                              const built = buildPayslipForMonth(
-                                employee,
-                                currentStructure,
-                                y,
-                                m,
-                                timesheets,
-                                leaves,
-                                wfhList,
-                                holidays
-                              );
-
-                              const saved = await saveGeneratedPayslip(built);
-                              setSavedPayslips((prev) => {
-                                const filtered = prev.filter((p) => !(p.year === y && p.monthIndex === m));
-                                return [saved, ...filtered].sort((a, b) => b.year - a.year || b.monthIndex - a.monthIndex);
-                              });
-
-                              setSalarySuccessMsg(`Payslip for ${built.month} generated and published successfully!`);
-                              setTimeout(() => setSalarySuccessMsg(""), 4000);
-                            } catch (err) {
-                              console.error("Generate payslip error:", err);
-                              alert("Failed to generate payslip.");
-                            } finally {
-                              setGeneratingPayslip(false);
-                            }
-                          }}
-                          className="px-3.5 py-1.5 bg-[#0B4FBA] hover:bg-[#003882] text-white text-xs font-semibold rounded-lg shadow-xs transition-all flex items-center space-x-1 disabled:opacity-50 cursor-pointer"
-                        >
-                          {generatingPayslip ? (
-                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                          ) : (
-                            <Plus className="w-3.5 h-3.5" />
-                          )}
-                          <span>Generate Payslip</span>
-                        </button>
-                      </div>
-                    </div>
+                      );
+                    })()}
 
                     <div className="overflow-x-auto">
                       <table className="w-full text-left text-xs">
@@ -3257,6 +3531,15 @@ export default function EmployeeDetailPage({
                                     </button>
                                     <button
                                       type="button"
+                                      onClick={() => openEditPayslipModal(payslip)}
+                                      className="px-2 py-1 text-xs font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-md transition-colors flex items-center space-x-1 cursor-pointer"
+                                      title="Edit Days & Leaves Deduction"
+                                    >
+                                      <Edit3 className="w-3.5 h-3.5" />
+                                      <span>Edit</span>
+                                    </button>
+                                    <button
+                                      type="button"
                                       disabled={deletingPayslipId === payslip.id}
                                       onClick={async () => {
                                         if (!confirm(`Are you sure you want to delete the generated payslip for ${payslip.month}?`)) return;
@@ -3302,6 +3585,154 @@ export default function EmployeeDetailPage({
           </div>
         )}
 
+        {/* EDIT PAYSLIP MODAL */}
+        {editingPayslip && employee && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs overflow-y-auto">
+            <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 w-full max-w-lg overflow-hidden animate-in fade-in zoom-in-95 my-8">
+              <div className="flex items-center justify-between p-4 border-b border-gray-100 bg-gray-50/80">
+                <div className="flex items-center space-x-2 text-gray-900 font-bold text-sm">
+                  <Edit3 className="w-4 h-4 text-[#0B4FBA]" />
+                  <span>Edit Payslip - {editingPayslip.month}</span>
+                </div>
+                <button
+                  onClick={() => setEditingPayslip(null)}
+                  className="p-1.5 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="p-6 space-y-4 text-xs">
+                {/* Summary Info */}
+                <div className="grid grid-cols-2 gap-3 bg-gray-50 p-3.5 rounded-xl border border-gray-200">
+                  <div>
+                    <span className="text-gray-500 font-semibold block text-[10px] uppercase">Employee</span>
+                    <span className="font-bold text-gray-900">{employee.firstName} {employee.lastName}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-500 font-semibold block text-[10px] uppercase">Pay Period</span>
+                    <span className="font-bold text-gray-900">{editingPayslip.month}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-500 font-semibold block text-[10px] uppercase">Total Days in Month</span>
+                    <span className="font-bold text-gray-900">{editingPayslip.workingDays} Days</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-500 font-semibold block text-[10px] uppercase">Gross Salary</span>
+                    <span className="font-bold text-gray-900">₹ {editingPayslip.grossSalary.toLocaleString("en-IN")}</span>
+                  </div>
+                </div>
+
+                {/* Edit Form */}
+                <div className="space-y-3">
+                  <div>
+                    <label className="block font-semibold text-gray-700 mb-1">
+                      Absent Days (Unpaid Leave Days)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      max={editingPayslip.workingDays || 31}
+                      step="0.5"
+                      value={editAbsentDays}
+                      onChange={(e) => handleEditAbsentDaysChange(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-[#0B4FBA]/30 font-semibold"
+                    />
+                    <p className="text-[11px] text-gray-400 mt-0.5">
+                      Changing absent days automatically recalculates the deduction amount.
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block font-semibold text-gray-700 mb-1">
+                      Leaves Deduction Amount (₹)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={editDeductionAmount}
+                      onChange={(e) => {
+                        setEditDeductionAmount(e.target.value);
+                        if (parseFloat(e.target.value) > 0) setEditApplyLeavesDeduction(true);
+                      }}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-[#0B4FBA]/30 font-semibold text-gray-900"
+                    />
+                    <p className="text-[11px] text-gray-400 mt-0.5">
+                      You can manually override this amount anytime.
+                    </p>
+                  </div>
+
+                  <label className="flex items-center space-x-2 cursor-pointer select-none pt-1">
+                    <input
+                      type="checkbox"
+                      checked={editApplyLeavesDeduction}
+                      onChange={(e) => setEditApplyLeavesDeduction(e.target.checked)}
+                      className="w-4 h-4 text-[#0B4FBA] rounded border-gray-300 focus:ring-[#0B4FBA]"
+                    />
+                    <span className="font-semibold text-gray-800">Apply this Leaves Deduction to payslip</span>
+                  </label>
+                </div>
+
+                {/* Live Recalculated Summary */}
+                {(() => {
+                  const days = parseFloat(editAbsentDays) || 0;
+                  const amt = editApplyLeavesDeduction ? (parseFloat(editDeductionAmount) || 0) : 0;
+                  const totalDays = editingPayslip.workingDays || 30;
+                  const paidDays = Math.max(0, totalDays - (editApplyLeavesDeduction ? days : 0));
+                  const baseDeductions = editingPayslip.deductions.filter((d) => d.name !== "Leaves");
+                  const totalDeds = baseDeductions.reduce((s, i) => s + (Number(i.amount) || 0), 0) + amt;
+                  const net = Math.max(0, editingPayslip.grossSalary - totalDeds);
+
+                  return (
+                    <div className="bg-emerald-50/70 border border-emerald-200 p-3.5 rounded-xl space-y-1.5">
+                      <div className="text-[11px] font-bold text-emerald-900 uppercase tracking-wide">
+                        Real-time Payslip Preview
+                      </div>
+                      <div className="grid grid-cols-3 gap-2 text-xs">
+                        <div>
+                          <span className="text-gray-500 block text-[10px]">Paid Days</span>
+                          <span className="font-bold text-gray-900">{paidDays} / {totalDays}</span>
+                        </div>
+                        <div>
+                          <span className="text-gray-500 block text-[10px]">Total Deductions</span>
+                          <span className="font-bold text-gray-900">₹ {totalDeds.toLocaleString("en-IN")}</span>
+                        </div>
+                        <div>
+                          <span className="text-gray-500 block text-[10px]">Net Salary</span>
+                          <span className="font-black text-emerald-700 text-sm">₹ {net.toLocaleString("en-IN")}</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+
+              <div className="p-4 border-t border-gray-100 bg-gray-50 flex items-center justify-end space-x-2">
+                <button
+                  type="button"
+                  onClick={() => setEditingPayslip(null)}
+                  className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg text-xs font-semibold hover:bg-gray-100 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={savingEditPayslip}
+                  onClick={handleSaveEditedPayslip}
+                  className="px-4 py-2 bg-[#0B4FBA] hover:bg-[#003882] text-white rounded-lg text-xs font-semibold shadow-xs flex items-center space-x-1.5 disabled:opacity-50 cursor-pointer"
+                >
+                  {savingEditPayslip ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Save className="w-3.5 h-3.5" />
+                  )}
+                  <span>Save & Update Payslip</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* PRINTABLE PAYSLIP MODAL */}
         {previewPayslip && employee && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs overflow-y-auto">
@@ -3342,6 +3773,11 @@ export default function EmployeeDetailPage({
                         alt="GAMANEXT"
                         className="h-11 w-auto object-contain"
                       />
+                    </div>
+                    <div>
+                      <h2 className="text-sm font-bold text-gray-900 tracking-tight">
+                        Gamanext Software Solutions
+                      </h2>
                     </div>
                     <p className="text-[11px] text-gray-700 font-medium">
                       <span className="font-semibold text-gray-900">Branch:</span> Gamaone &nbsp;|&nbsp; <span className="font-semibold text-gray-900">GSTIN:</span> 36AAGCG7123A1Z8
@@ -3384,10 +3820,6 @@ export default function EmployeeDetailPage({
                       <span className="w-28 font-semibold text-gray-500">Branch:</span>
                       <span className="font-bold text-gray-900">Gamaone</span>
                     </div>
-                    <div className="flex">
-                      <span className="w-28 font-semibold text-gray-500">Date of Joining:</span>
-                      <span className="text-gray-800">{employee.dateOfJoining || "—"}</span>
-                    </div>
                   </div>
 
                   <div className="space-y-1.5">
@@ -3411,6 +3843,12 @@ export default function EmployeeDetailPage({
                       <span className="w-28 font-semibold text-gray-500">Paid Days:</span>
                       <span className="font-bold text-gray-900">{previewPayslip.paidDays} / {previewPayslip.workingDays} Days</span>
                     </div>
+                    {previewPayslip.absentDays && previewPayslip.absentDays > 0 ? (
+                      <div className="flex">
+                        <span className="w-28 font-semibold text-gray-500">Absent Days:</span>
+                        <span className="font-bold text-rose-600">{previewPayslip.absentDays} Days</span>
+                      </div>
+                    ) : null}
                   </div>
                 </div>
 
@@ -3478,7 +3916,7 @@ export default function EmployeeDetailPage({
 
                 {/* 5. Clean Footer Note (Signatures removed per request) */}
                 <div className="text-[10px] text-gray-400 text-center pt-4 border-t border-gray-100">
-                  This is a system-generated electronic payslip issued by Gamanext Technologies Pvt. Ltd. and requires no signature.
+                  This is a system-generated electronic payslip issued by Gamanext Software Solutions and requires no signature.
                 </div>
               </div>
             </div>

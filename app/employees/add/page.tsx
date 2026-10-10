@@ -59,6 +59,8 @@ export default function AddEmployeePage() {
     department: "Engineering",
     dateOfJoining: new Date().toISOString().split("T")[0],
     jobType: "Full-Time",
+    monthStartDate: "1",
+    monthEndDate: "31",
     username: "",
     password: "",
     aadharNumber: "",
@@ -88,6 +90,12 @@ export default function AddEmployeePage() {
 
   // Job Type Options
   const jobTypeOptions = ["Full-Time", "Part-Time", "Contract", "Internship"];
+
+  // Day of Month Options (1 to 31)
+  const DAY_OF_MONTH_OPTIONS = Array.from({ length: 31 }, (_, i) => ({
+    value: (i + 1).toString(),
+    label: `${i + 1}`,
+  }));
 
   // Generate 6-digit numeric Unique Employee ID & matching username on load
   useEffect(() => {
@@ -585,6 +593,32 @@ export default function AddEmployeePage() {
                   )}
                 </button>
               </div>
+            </div>
+
+            {/* Month Start Date (Day 1 - 31) */}
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 mb-1">
+                Month Start Date (Day 1 - 31)
+              </label>
+              <CustomDropdown
+                options={DAY_OF_MONTH_OPTIONS}
+                value={formData.monthStartDate || "1"}
+                onChange={(val) => handleChange("monthStartDate", val)}
+                placeholder="Start Day (1-31)"
+              />
+            </div>
+
+            {/* Month End Date (Day 1 - 31) */}
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 mb-1">
+                Month End Date (Day 1 - 31)
+              </label>
+              <CustomDropdown
+                options={DAY_OF_MONTH_OPTIONS}
+                value={formData.monthEndDate || "31"}
+                onChange={(val) => handleChange("monthEndDate", val)}
+                placeholder="End Day (1-31)"
+              />
             </div>
 
             <div>

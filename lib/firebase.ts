@@ -64,6 +64,8 @@ export interface EmployeeData {
   emergencyContact1: EmergencyContact;
   emergencyContact2: EmergencyContact;
   jobType?: string;
+  monthStartDate?: string;
+  monthEndDate?: string;
   salaryStructure?: EmployeeSalaryStructure;
   isLocked?: boolean;
   lockedAt?: string;
@@ -198,6 +200,8 @@ export interface MonthlyPayslip {
   paymentDate: string; // e.g. "01 Aug 2026"
   workingDays: number;
   paidDays: number;
+  absentDays?: number;
+  leaveDeductionAmount?: number;
   earnings: SalaryAttribute[];
   deductions: SalaryAttribute[];
   grossSalary: number;
@@ -2756,6 +2760,50 @@ export function generateMonthlyPayslips(
 
 export const LOCAL_STORAGE_KEY_SAVED_PAYSLIPS = "gamanext_saved_payslips";
 
+export function getPayrollCycleDateRange(
+  year: number,
+  monthIndex: number, // 0 to 11
+  startDayNum: number = 1,
+  endDayNum: number = 31
+): { startDate: Date; endDate: Date; startDateStr: string; endDateStr: string; totalCycleDays: number } {
+  let startYear = year;
+  let startMonth = monthIndex;
+  let endYear = year;
+  let endMonth = monthIndex;
+
+  if (startDayNum > endDayNum) {
+    // Starts in previous month, ends in current month (e.g. 26th to 25th)
+    startMonth = monthIndex - 1;
+    if (startMonth < 0) {
+      startMonth = 11;
+      startYear = year - 1;
+    }
+  }
+
+  const maxStartDays = new Date(startYear, startMonth + 1, 0).getDate();
+  const effectiveStartDay = Math.min(Math.max(1, startDayNum), maxStartDays);
+
+  const maxEndDays = new Date(endYear, endMonth + 1, 0).getDate();
+  const effectiveEndDay = Math.min(Math.max(1, endDayNum), maxEndDays);
+
+  const startDate = new Date(startYear, startMonth, effectiveStartDay);
+  const endDate = new Date(endYear, endMonth, effectiveEndDay);
+
+  const formatDate = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+  const diffTime = Math.max(0, endDate.getTime() - startDate.getTime());
+  const totalCycleDays = Math.round(diffTime / (1000 * 60 * 60 * 24)) + 1;
+
+  return {
+    startDate,
+    endDate,
+    startDateStr: formatDate(startDate),
+    endDateStr: formatDate(endDate),
+    totalCycleDays,
+  };
+}
+
 export function buildPayslipForMonth(
   employee: EmployeeData,
   structure: EmployeeSalaryStructure,
@@ -2764,7 +2812,12 @@ export function buildPayslipForMonth(
   timesheets: TimesheetEntry[] = [],
   leaves: LeaveRequest[] = [],
   wfhList: WFHRequest[] = [],
-  holidays: HolidayItem[] = []
+  holidays: HolidayItem[] = [],
+  customAbsence?: {
+    applyLeavesDeduction: boolean;
+    absentDays: number;
+    deductionAmount: number;
+  }
 ): MonthlyPayslip {
   const monthNames = [
     "January", "February", "March", "April", "May", "June",
@@ -2775,29 +2828,30 @@ export function buildPayslipForMonth(
   const displayMonth = `${monthName} ${year}`;
   const paymentDate = `01 ${monthName.slice(0, 3)} ${year}`;
 
-  const absence = calculateMonthlyTimesheetAbsences(
-    employee,
-    year,
-    monthIndex,
-    structure.grossSalary,
-    timesheets,
-    leaves,
-    wfhList,
-    holidays
-  );
+  const startDay = parseInt(employee.monthStartDate || "1") || 1;
+  const endDay = parseInt(employee.monthEndDate || "31") || 31;
+  const cycle = getPayrollCycleDateRange(year, monthIndex, startDay, endDay);
+  const totalDaysInMonth = cycle.totalCycleDays || new Date(year, monthIndex + 1, 0).getDate();
 
   let deductions = [...structure.deductions];
-  if (absence.unappliedDays > 0) {
+  let absentDays = 0;
+  let leaveDeductionAmount = 0;
+
+  // Only apply leaves deduction if explicitly requested by the user
+  if (customAbsence && customAbsence.applyLeavesDeduction && customAbsence.deductionAmount > 0) {
+    absentDays = Math.max(0, customAbsence.absentDays || 0);
+    leaveDeductionAmount = Math.max(0, customAbsence.deductionAmount || 0);
     deductions = [
-      ...deductions,
+      ...deductions.filter((d) => d.name !== "Leaves"),
       {
         id: `ded-lop-${year}-${monthIndex + 1}`,
         name: "Leaves",
-        amount: absence.lopDeductionAmount,
+        amount: leaveDeductionAmount,
       },
     ];
   }
 
+  const paidDays = Math.max(0, totalDaysInMonth - absentDays);
   const totalDeductions = deductions.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
   const netPay = Math.max(0, structure.grossSalary - totalDeductions);
 
@@ -2808,8 +2862,10 @@ export function buildPayslipForMonth(
     year,
     monthIndex,
     paymentDate,
-    workingDays: absence.totalDaysInMonth,
-    paidDays: absence.paidDays,
+    workingDays: totalDaysInMonth,
+    paidDays,
+    absentDays,
+    leaveDeductionAmount,
     earnings: structure.earnings,
     deductions,
     grossSalary: structure.grossSalary,
