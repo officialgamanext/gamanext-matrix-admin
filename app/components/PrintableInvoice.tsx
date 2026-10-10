@@ -27,7 +27,7 @@ export default function PrintableInvoice({ invoice, id = "printable-invoice" }: 
         <div>
           <div className="mb-2">
             <img
-              src="/logo.jpeg"
+              src={invoice.myCompanyDetails.logoUrl || "/logo.jpeg"}
               alt="Logo"
               className="h-16 w-auto object-contain"
               crossOrigin="anonymous"

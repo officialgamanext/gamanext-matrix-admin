@@ -418,6 +418,7 @@ export default function CustomerDetailPage({
         website: companySettings.website,
         address: companySettings.address,
         gstin: companySettings.gstin,
+        logoUrl: companySettings.logoUrl || "/logo.jpeg",
         bankName: companySettings.bankName,
         accountName: companySettings.accountName,
         accountNumber: companySettings.accountNumber,

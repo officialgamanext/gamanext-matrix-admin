@@ -6,11 +6,27 @@ import { useState, useRef, useEffect } from "react";
 import { useAuth } from "@/lib/authContext";
 import Link from "next/link";
 
+import { getCompanySettingsFromStorage } from "@/lib/firebase";
+
 export default function Navbar() {
   const { user, logout } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
   const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [companyLogo, setCompanyLogo] = useState<string>("/logo.jpeg");
   const menuRef = useRef<HTMLDivElement>(null);
+
+  // Load custom company logo
+  useEffect(() => {
+    async function loadLogo() {
+      try {
+        const settings = await getCompanySettingsFromStorage();
+        if (settings?.logoUrl) {
+          setCompanyLogo(settings.logoUrl);
+        }
+      } catch (e) {}
+    }
+    loadLogo();
+  }, []);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -38,13 +54,11 @@ export default function Navbar() {
       {/* Left section: Brand & Logo */}
       <div className="flex items-center space-x-3">
         <Link href="/" className="bg-white px-2.5 py-1 rounded-md shadow-sm flex items-center justify-center transition-transform hover:scale-[1.02]">
-          <Image
-            src="/logo.jpeg"
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={companyLogo}
             alt="GamaNext Software Solutions"
-            width={130}
-            height={32}
-            className="h-6 w-auto object-contain"
-            priority
+            className="h-6 w-auto object-contain max-h-6 max-w-[140px]"
           />
         </Link>
         <div className="hidden sm:flex items-center space-x-1.5 bg-blue-950/40 border border-blue-400/30 text-blue-100 text-xs px-2.5 py-0.5 rounded-full font-medium">

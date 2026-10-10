@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import Image from "next/image";
+import { getCompanySettingsFromStorage } from "@/lib/firebase";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/authContext";
 import {
@@ -30,6 +31,19 @@ export default function AdminLoginPage() {
   const [errorMsg, setErrorMsg] = useState("");
   const [returnUrl, setReturnUrl] = useState("/");
   const [showHelpModal, setShowHelpModal] = useState(false);
+  const [companyLogo, setCompanyLogo] = useState<string>("/logo.jpeg");
+
+  useEffect(() => {
+    async function loadLogo() {
+      try {
+        const settings = await getCompanySettingsFromStorage();
+        if (settings?.logoUrl) {
+          setCompanyLogo(settings.logoUrl);
+        }
+      } catch (e) {}
+    }
+    loadLogo();
+  }, []);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -88,13 +102,11 @@ export default function AdminLoginPage() {
       <div className="w-full max-w-sm flex flex-col items-center space-y-4 my-auto">
         {/* 1. Brand Logo */}
         <div className="flex flex-col items-center">
-          <Image
-            src="/logo.jpeg"
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={companyLogo}
             alt="GamaNext Software Solutions"
-            width={180}
-            height={48}
-            className="h-10 w-auto object-contain"
-            priority
+            className="h-10 w-auto object-contain max-h-10 max-w-[200px]"
           />
         </div>
 

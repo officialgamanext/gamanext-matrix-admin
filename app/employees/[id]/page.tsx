@@ -58,6 +58,8 @@ import {
   ALL_WEEKDAYS,
   isEmployeeWeekend,
   calculateCycleAbsences,
+  getCompanySettingsFromStorage,
+  CompanySettings,
 } from "@/lib/firebase";
 import {
   ArrowLeft,
@@ -263,6 +265,7 @@ export default function EmployeeDetailPage({
   const [editDeductionAmount, setEditDeductionAmount] = useState<string>("0");
   const [editApplyLeavesDeduction, setEditApplyLeavesDeduction] = useState<boolean>(true);
   const [savingEditPayslip, setSavingEditPayslip] = useState(false);
+  const [companySettings, setCompanySettings] = useState<CompanySettings | null>(null);
   const payslipYearOptions = useMemo(() => getPayslipYearOptions(), []);
 
   // Helper to calculate leaves deduction amount based on gross and days in payroll cycle
@@ -397,6 +400,7 @@ export default function EmployeeDetailPage({
             salaryData,
             holidaysData,
             savedPayslipsData,
+            compSettingsData,
           ] = await Promise.all([
             getProjectsForEmployee(empKey),
             getLeavesForEmployee(empKey),
@@ -411,7 +415,9 @@ export default function EmployeeDetailPage({
             getSalaryStructureForEmployee(empKey, emp),
             getHolidaysFromStorage(),
             getSavedPayslipsForEmployee(empKey),
+            getCompanySettingsFromStorage(),
           ]);
+          if (compSettingsData) setCompanySettings(compSettingsData);
 
           setProjects(projData);
           setLeaves(leaveData);
@@ -3825,14 +3831,14 @@ export default function EmployeeDetailPage({
                     <div>
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
-                        src="/logo.jpeg"
-                        alt="GAMANEXT"
+                        src={companySettings?.logoUrl || "/logo.jpeg"}
+                        alt={companySettings?.companyName || "GAMANEXT"}
                         className="h-11 w-auto object-contain"
                       />
                     </div>
                     <div>
                       <h2 className="text-sm font-bold text-gray-900 tracking-tight">
-                        Gamanext Software Solutions
+                        {companySettings?.companyName || "Gamanext Software Solutions"}
                       </h2>
                     </div>
                     <p className="text-[11px] text-gray-700 font-medium">

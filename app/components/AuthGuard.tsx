@@ -1,17 +1,30 @@
 "use client";
 
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import Image from "next/image";
 import { useAuth } from "@/lib/authContext";
 import { Loader2, ShieldCheck } from "lucide-react";
+import { getCompanySettingsFromStorage } from "@/lib/firebase";
 
 export default function AuthGuard({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
+  const [companyLogo, setCompanyLogo] = useState<string>("/logo.jpeg");
   const pathname = usePathname();
   const router = useRouter();
 
   const isLoginPage = pathname === "/login";
+
+  useEffect(() => {
+    async function loadLogo() {
+      try {
+        const settings = await getCompanySettingsFromStorage();
+        if (settings?.logoUrl) {
+          setCompanyLogo(settings.logoUrl);
+        }
+      } catch (e) {}
+    }
+    loadLogo();
+  }, []);
 
   useEffect(() => {
     if (!loading) {
@@ -39,13 +52,11 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4 selection:bg-[#0B4FBA] selection:text-white">
         <div className="bg-white p-4 rounded-[10px] shadow-md mb-4 border border-slate-100 animate-pulse flex items-center justify-center">
-          <Image
-            src="/logo.jpeg"
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={companyLogo}
             alt="GamaNext"
-            width={150}
-            height={38}
-            className="h-7 w-auto object-contain"
-            priority
+            className="h-7 w-auto object-contain max-w-[160px]"
           />
         </div>
 

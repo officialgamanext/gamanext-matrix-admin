@@ -1461,6 +1461,7 @@ export interface CompanySettings {
   website?: string;
   address: string;
   gstin: string;
+  logoUrl?: string;
   bankName?: string;
   accountName?: string;
   accountNumber?: string;
@@ -1489,6 +1490,7 @@ export interface CustomerInvoice {
     website?: string;
     address: string;
     gstin: string;
+    logoUrl?: string;
     bankName?: string;
     accountName?: string;
     accountNumber?: string;
@@ -1533,6 +1535,7 @@ const LOCAL_STORAGE_KEY_COMPANY_SETTINGS = "gamanext_company_settings_v1";
 
 export const DEFAULT_COMPANY_SETTINGS: CompanySettings = {
   companyName: "Gamanext Software Solutions Pvt. Ltd.",
+  logoUrl: "/logo.jpeg",
   phone: "+91 6281288314",
   email: "hello@gamanext.com",
   website: "www.gamanext.com",

@@ -40,7 +40,10 @@ export default function SettingsPage() {
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"company" | "bank" | "invoice">("company");
 
-  // File Upload State for QR Code & Signature
+  // File Upload State for Company Logo, QR Code & Signature
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [logoPreviewUrl, setLogoPreviewUrl] = useState<string | null>(null);
+
   const [qrCodeFile, setQrCodeFile] = useState<File | null>(null);
   const [qrPreviewUrl, setQrPreviewUrl] = useState<string | null>(null);
 
@@ -53,6 +56,9 @@ export default function SettingsPage() {
       try {
         const data = await getCompanySettingsFromStorage();
         setSettings(data);
+        if (data.logoUrl) {
+          setLogoPreviewUrl(data.logoUrl);
+        }
         if (data.upiQrCodeUrl) {
           setQrPreviewUrl(data.upiQrCodeUrl);
         }
@@ -67,6 +73,20 @@ export default function SettingsPage() {
     }
     loadData();
   }, []);
+
+  const handleLogoFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      setLogoFile(file);
+      setLogoPreviewUrl(URL.createObjectURL(file));
+    }
+  };
+
+  const handleRemoveLogo = () => {
+    setLogoFile(null);
+    setLogoPreviewUrl(null);
+    setSettings((prev) => ({ ...prev, logoUrl: "" }));
+  };
 
   const handleQrFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -104,6 +124,14 @@ export default function SettingsPage() {
     let updatedSettings = { ...settings };
 
     try {
+      // Upload Company Logo if selected
+      if (logoFile) {
+        const uploadedLogoUrl = await uploadToImageKit(logoFile, "company-logos");
+        if (uploadedLogoUrl) {
+          updatedSettings.logoUrl = uploadedLogoUrl;
+        }
+      }
+
       // Upload QR Code if selected
       if (qrCodeFile) {
         const uploadedQrUrl = await uploadToImageKit(qrCodeFile, "qr-codes");
@@ -122,9 +150,11 @@ export default function SettingsPage() {
 
       const saved = await saveCompanySettingsToStorage(updatedSettings);
       setSettings(saved);
+      if (saved.logoUrl) setLogoPreviewUrl(saved.logoUrl);
       if (saved.upiQrCodeUrl) setQrPreviewUrl(saved.upiQrCodeUrl);
       if (saved.signatoryImageUrl) setSigPreviewUrl(saved.signatoryImageUrl);
 
+      setLogoFile(null);
       setQrCodeFile(null);
       setSigFile(null);
       setIsEditing(false); // Return to View Mode after saving
@@ -141,8 +171,10 @@ export default function SettingsPage() {
   const handleResetDefault = () => {
     if (confirm("Reset company settings to default values?")) {
       setSettings(DEFAULT_COMPANY_SETTINGS);
+      setLogoFile(null);
       setQrCodeFile(null);
       setSigFile(null);
+      setLogoPreviewUrl(DEFAULT_COMPANY_SETTINGS.logoUrl || null);
       setQrPreviewUrl(DEFAULT_COMPANY_SETTINGS.upiQrCodeUrl || null);
       setSigPreviewUrl(DEFAULT_COMPANY_SETTINGS.signatoryImageUrl || null);
     }
@@ -284,6 +316,25 @@ export default function SettingsPage() {
                     <Edit2 className="w-3.5 h-3.5" />
                     <span>Edit Profile</span>
                   </button>
+                </div>
+
+                {/* Company Logo Display Card */}
+                <div className="flex flex-col sm:flex-row sm:items-center gap-4 p-4 bg-gray-50/80 rounded-xl border border-gray-100">
+                  <div className="w-24 h-16 rounded-xl bg-white border border-gray-200 p-2 flex items-center justify-center shrink-0 shadow-2xs overflow-hidden">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={settings.logoUrl || "/logo.jpeg"}
+                      alt={settings.companyName}
+                      className="max-h-full max-w-full object-contain"
+                    />
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-bold text-[#0B4FBA] uppercase tracking-wider block">Official Brand Logo</span>
+                    <span className="text-xs font-semibold text-gray-900 block mt-0.5">Active Company Logo</span>
+                    <p className="text-[11px] text-gray-500 mt-0.5">
+                      Applied across the Top Navbar, Printable Invoices, Salary Payslips, and Login screen.
+                    </p>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
@@ -449,8 +500,67 @@ export default function SettingsPage() {
                 <div className="border-b border-gray-100 pb-3">
                   <h2 className="text-base font-bold text-gray-900">Edit Organization Information</h2>
                   <p className="text-xs text-gray-500">
-                    Update official company contact and GST identification.
+                    Update official company contact, GST identification, and brand logo.
                   </p>
+                </div>
+
+                {/* Company Logo Upload Widget */}
+                <div className="p-4 bg-blue-50/50 rounded-xl border border-blue-200/80 space-y-3">
+                  <div>
+                    <label className="block text-xs font-bold text-gray-900">
+                      Company Brand Logo
+                    </label>
+                    <p className="text-[11px] text-gray-500">
+                      Upload your official logo. This will be automatically displayed across all Payslips, Invoices, Top Header, and Login screen.
+                    </p>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row items-center gap-4">
+                    <div className="w-28 h-20 rounded-xl bg-white border-2 border-dashed border-gray-300 flex items-center justify-center overflow-hidden shrink-0 shadow-2xs p-2">
+                      {logoPreviewUrl || settings.logoUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={logoPreviewUrl || settings.logoUrl || "/logo.jpeg"}
+                          alt="Company Logo Preview"
+                          className="max-h-full max-w-full object-contain"
+                        />
+                      ) : (
+                        <div className="text-center text-gray-400">
+                          <ImageIcon className="w-6 h-6 mx-auto mb-1 text-gray-300" />
+                          <span className="text-[10px]">No Logo</span>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex-1 space-y-2 w-full">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <label className="cursor-pointer px-3.5 py-1.5 bg-[#0B4FBA] hover:bg-[#003882] text-white rounded-lg text-xs font-semibold shadow-xs flex items-center space-x-1.5 transition-all">
+                          <Upload className="w-3.5 h-3.5" />
+                          <span>Upload New Logo</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={handleLogoFileChange}
+                          />
+                        </label>
+
+                        {(logoPreviewUrl || settings.logoUrl) && (
+                          <button
+                            type="button"
+                            onClick={handleRemoveLogo}
+                            className="px-3 py-1.5 border border-red-200 text-red-600 hover:bg-red-50 rounded-lg text-xs font-semibold flex items-center space-x-1 transition-all cursor-pointer"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                            <span>Remove</span>
+                          </button>
+                        )}
+                      </div>
+                      <p className="text-[11px] text-gray-400">
+                        Supports PNG, JPG, WebP, or SVG (Recommended: 400x120px transparent background).
+                      </p>
+                    </div>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
